@@ -1,15 +1,14 @@
 package fi.fmi.mobileweather.widgets.model;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
+import java.util.List;
 
 public record WidgetData(
-    JSONArray announcements,
-    JSONObject forecast,
-    JSONObject warnings,
-    String location
+    List<Announcement> announcements,
+    List<ForecastItem> forecast,
+    WarningsRecordRoot warnings,
+    List<LocationRecord> location
 ) {
-    public WidgetData(JSONArray announcements, JSONObject forecast) {
+    public WidgetData(List<Announcement> announcements, List<ForecastItem> forecast) {
         this(announcements, forecast, null, null);
     }
 }

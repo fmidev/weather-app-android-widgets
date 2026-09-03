@@ -1,30 +1,34 @@
 package fi.fmi.mobileweather.widgets;
 
+import static android.view.View.GONE;
+import static android.view.View.VISIBLE;
+import static fi.fmi.mobileweather.widgets.model.PrefKey.WIDGET_UI_UPDATED;
+
+import android.appwidget.AppWidgetManager;
+import android.content.Context;
 import android.text.Html;
 import android.util.Log;
 import android.widget.RemoteViews;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 
-import static fi.fmi.mobileweather.widgets.model.PrefKey.WIDGET_UI_UPDATED;
-
 import fi.fmi.mobileweather.widgets.enumeration.WidgetType;
+import fi.fmi.mobileweather.widgets.model.Announcement;
+import fi.fmi.mobileweather.widgets.model.ForecastItem;
 import fi.fmi.mobileweather.widgets.model.WidgetData;
 import fi.fmi.mobileweather.widgets.util.SharedPreferencesHelper;
 
 public class LargeForecastWidgetProvider extends BaseWidgetProvider {
+    private static final String TAG = "LargeWidgetProvider";
 
     @Override
     protected WidgetType getWidgetType() {
         return WidgetType.WEATHER_FORECAST;
     }
-    // set the widget layout here
+
     @Override
     protected int getLayoutResourceId() {
         return R.layout.large_forecast_widget_layout;
@@ -33,137 +37,87 @@ public class LargeForecastWidgetProvider extends BaseWidgetProvider {
     private double getTimestepCount(int widgetWidth) {
         final int columnWidth = 46;
         final int margins = 32;
-
-        return Math.floor((widgetWidth - margins)/columnWidth);
+        return Math.floor((widgetWidth - margins) / (double)columnWidth);
     }
 
     @Override
-    protected void setWidgetUi(WidgetData widgetData, SharedPreferencesHelper pref, WidgetInitResult widgetInitResult, int appWidgetId) {
-
-        JSONObject forecastJson = widgetData.forecast();
-
-        RemoteViews widgetRemoteViews = widgetInitResult.widgetRemoteViews();
-        final double timeStepCount = getTimestepCount(getWidgetWidthInPixels(appWidgetId));
-
-        Log.d("widgetWidth", String.valueOf(getWidgetWidthInPixels(appWidgetId)));
+    protected void setWidgetUi(Context context, AppWidgetManager appWidgetManager, WidgetData widgetData, SharedPreferencesHelper pref, WidgetInitResult widgetInitResult, int appWidgetId) {
+        RemoteViews views = widgetInitResult.widgetRemoteViews();
+        List<ForecastItem> forecastItems = widgetData.forecast();
+        int width = appWidgetManager.getAppWidgetOptions(appWidgetId).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH);
+        double timeStepCount = getTimestepCount(width);
 
         try {
-            // Get the keys of the JSONObject
-            Iterator<String> keys = forecastJson.keys();
+            if (forecastItems == null || forecastItems.isEmpty()) return;
 
-            // Retrieve the first key
-            if (!keys.hasNext()) {
-                return;
-            }
-            String firstKey = keys.next();
-            Log.d("Download mainJson", "First key (geoid): " + firstKey);
-
-            // Extract the JSONArray associated with the first key
-            JSONArray data = forecastJson.getJSONArray(firstKey);
-
-            // find first epoch time which is in future
-            int firstFutureTimeIndex = getFirstFutureTimeIndex(data);
-            // if no future time found or less than 6 future times available, do not continue
-            if (firstFutureTimeIndex == -1 || data.length() < (firstFutureTimeIndex + 6)) {
-                // throw new Exception("No future time found or less than 5 future times available");
-                throw new Exception("No future time found or less than 6 future times available");
+            int firstFutureIndex = -1;
+            long now = System.currentTimeMillis();
+            for (int i = 0; i < forecastItems.size(); i++) {
+                if (forecastItems.get(i).epochtime() * 1000 > now) {
+                    firstFutureIndex = i;
+                    break;
+                }
             }
 
-            widgetRemoteViews.removeAllViews(R.id.forecastContainer);
+            if (firstFutureIndex == -1 || forecastItems.size() < (firstFutureIndex + 1)) return;
 
-            // handle the first 6 JsonObjects with future time
-            for (int i = firstFutureTimeIndex; i < (firstFutureTimeIndex + timeStepCount); i++) {
-                JSONObject forecast = data.getJSONObject(i);
+            views.removeAllViews(R.id.forecastContainer);
 
-                // if first future index set main part of the widget
-                if (i == firstFutureTimeIndex) {
-                    // set the location name and region
-                    String name = forecast.getString("name");
-                    String region = forecast.getString("region");
-                    widgetRemoteViews.setTextViewText(R.id.locationNameTextView, name + ", ");
-                    widgetRemoteViews.setTextViewText(R.id.locationRegionTextView, region);
-
-                    String localTime = forecast.getString("localtime");
-                    String formattedTime = getFormattedWeatherTime(localTime);
-                    widgetRemoteViews.setTextViewText(R.id.timeTextView, formattedTime);
-
-                    String temperature = forecast.getString("temperature");
-                    int weatherSymbol = forecast.getInt("smartSymbol");
-
-                    widgetRemoteViews.setTextViewText(R.id.temperatureTextView, temperature + "°");
-
-                    int drawableResId = context.getResources().getIdentifier("s_" + weatherSymbol, "drawable", context.getPackageName());
-                    widgetRemoteViews.setImageViewResource(R.id.weatherIconImageView, drawableResId);
-                    widgetRemoteViews.setContentDescription(R.id.weatherIconImageView, getSymbolTranslation(weatherSymbol));
-
-                    // next iteration in loop
+            for (int i = firstFutureIndex; i < Math.min(forecastItems.size(), firstFutureIndex + timeStepCount); i++) {
+                ForecastItem forecast = forecastItems.get(i);
+                if (i == firstFutureIndex) {
+                    views.setTextViewText(R.id.locationNameTextView, forecast.name() + ", ");
+                    views.setTextViewText(R.id.locationRegionTextView, forecast.region());
+                    views.setTextViewText(R.id.timeTextView, getFormattedTime(forecast.localtime()));
+                    views.setTextViewText(R.id.temperatureTextView, Math.round(forecast.temperature()) + "°");
+                    int symbol = forecast.smartSymbol();
+                    int iconRes = context.getResources().getIdentifier("s_" + symbol, "drawable", context.getPackageName());
+                    views.setImageViewResource(R.id.weatherIconImageView, iconRes);
                     continue;
                 }
-                RemoteViews timeStep = new RemoteViews(context.getPackageName(), R.layout.medium_forecast_timestep);
 
-                // time at the selected location
-                String localTime = forecast.getString("localtime");
-                String temperature = forecast.getString("temperature");
-                int weatherSymbol = forecast.getInt("smartSymbol");
-
-                // j = weather row layout index
-                int j = i - 1;
-
-                // ** set the time, temperature and weather icon
-
-                String formattedTime = getFormattedWeatherTime(localTime);
-                timeStep.setTextViewText(R.id.timeTextView, formattedTime);
-
-                timeStep.setTextViewText(R.id.temperatureTextView, temperature + "°");
-
-                int drawableResId = context.getResources().getIdentifier("s_" + weatherSymbol, "drawable", context.getPackageName());
-                timeStep.setImageViewResource(R.id.weatherIconImageView, drawableResId);
-                timeStep.setContentDescription(R.id.weatherIconImageView, getSymbolTranslation(weatherSymbol));
-
-                widgetRemoteViews.addView(R.id.forecastContainer, timeStep);
+                RemoteViews step = new RemoteViews(context.getPackageName(), R.layout.medium_forecast_timestep);
+                step.setTextViewText(R.id.timeTextView, getFormattedTime(forecast.localtime()));
+                step.setTextViewText(R.id.temperatureTextView, Math.round(forecast.temperature()) + "°");
+                int symbol = forecast.smartSymbol();
+                int iconRes = context.getResources().getIdentifier("s_" + symbol, "drawable", context.getPackageName());
+                step.setImageViewResource(R.id.weatherIconImageView, iconRes);
+                views.addView(R.id.forecastContainer, step);
             }
 
-            // Get the current time
-            Date currentTime = new Date();
-            // Format the time as "HH:mm"
-            SimpleDateFormat formatter = new SimpleDateFormat("HH:mm", Locale.getDefault());
-            String formattedTime = formatter.format(currentTime);
+            String updateStr = context.getString(R.string.updated) + " <b>" + new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date()) + "</b>";
+            views.setTextViewText(R.id.updateTimeTextView, Html.fromHtml(updateStr, Html.FROM_HTML_MODE_LEGACY));
 
-            String htmlString = context.getString(R.string.updated)
-                    + " "
-                    + "<b>"
-                    // add time of now in HH:mm format
-                    + formattedTime
-                    + "</b>";
-
-            // Convert the HTML string to a CharSequence
-            CharSequence formattedText;
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                formattedText = Html.fromHtml(htmlString, Html.FROM_HTML_MODE_LEGACY);
-            } else {
-                formattedText = Html.fromHtml(htmlString);
+            views.setViewVisibility(R.id.crisisViewContainer, GONE);
+            List<Announcement> announcements = widgetData.announcements();
+            if (announcements != null) {
+                for (Announcement ann : announcements) {
+                    if ("Crisis".equals(ann.type())) {
+                        RemoteViews crisisView = new RemoteViews(context.getPackageName(), R.layout.crisis_view);
+                        crisisView.setTextViewText(R.id.crisisText, ann.content());
+                        views.addView(R.id.crisisViewContainer, crisisView);
+                        views.setViewVisibility(R.id.crisisViewContainer, VISIBLE);
+                        views.setViewVisibility(R.id.locationNameTextView, GONE);
+                        views.setViewVisibility(R.id.locationRegionTextView, GONE);
+                        break;
+                    }
+                }
             }
 
-            widgetRemoteViews.setTextViewText(R.id.updateTimeTextView, formattedText);
-
-            // Crisis view
-            showCrisisViewIfNeeded(widgetData.announcements(), widgetRemoteViews, pref, true, false);
+            appWidgetManager.updateAppWidget(appWidgetId, views);
             pref.saveLong(WIDGET_UI_UPDATED, System.currentTimeMillis());
-            appWidgetManager.updateAppWidget(appWidgetId, widgetRemoteViews);
-            return;
-
-        } catch (final Exception e) {
-            Log.e("Download json", "In large widget setWidgetUi exception: " + e.getMessage());
-            showErrorView(
-                    context,
-                    pref,
-                    context.getResources().getString(R.string.update_failed),
-                    getConnectionErrorDescription(),
-                    appWidgetId
-            );
+        } catch (Exception e) {
+            Log.e(TAG, "UI Update failed", e);
         }
-
-        appWidgetManager.updateAppWidget(appWidgetId, widgetRemoteViews);
     }
 
+    private String getFormattedTime(String localTime) {
+        try {
+            java.text.SimpleDateFormat in = new java.text.SimpleDateFormat("yyyyMMdd'T'HHmmss", java.util.Locale.getDefault());
+            java.text.SimpleDateFormat out = new java.text.SimpleDateFormat("HH", java.util.Locale.getDefault());
+            return out.format(in.parse(localTime));
+        } catch (Exception e) {
+            return "";
+        }
+    }
 }

@@ -3,397 +3,147 @@ package fi.fmi.mobileweather.widgets;
 import static android.text.format.DateUtils.isToday;
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
-
-import static fi.fmi.mobileweather.widgets.model.PrefKey.FAVORITE_LATLON;
 import static fi.fmi.mobileweather.widgets.model.PrefKey.WIDGET_UI_UPDATED;
 
-import fi.fmi.mobileweather.widgets.model.PrefKey;
-import fi.fmi.mobileweather.widgets.util.SharedPreferencesHelper;
-
-import android.annotation.SuppressLint;
+import android.appwidget.AppWidgetManager;
+import android.content.Context;
 import android.util.Log;
 import android.widget.RemoteViews;
 
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.lang.reflect.Type;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Collections;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.TimeZone;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import fi.fmi.mobileweather.widgets.model.LocationRecord;
 import fi.fmi.mobileweather.widgets.model.Warning;
 import fi.fmi.mobileweather.widgets.model.WarningsRecordRoot;
 import fi.fmi.mobileweather.widgets.model.WidgetData;
-import fi.fmi.mobileweather.widgets.util.AirplaneModeUtil;
+import fi.fmi.mobileweather.widgets.util.SharedPreferencesHelper;
 import fi.fmi.mobileweather.widgets.util.WarningsIconMapper;
 import fi.fmi.mobileweather.widgets.util.WarningsTextMapper;
 
 public abstract class BaseWarningsWidgetProvider extends BaseWidgetProvider {
+    private static final String TAG = "BaseWarningsProvider";
 
     @Override
-    protected void executeDataFetchingWithSelectedLocation(int geoId, SharedPreferencesHelper pref, int widgetId) {
-        String latlon = pref.getString(FAVORITE_LATLON, null);
-        executeDataFetchingWithLatLon(latlon, pref, widgetId);
-    }
+    protected void setWidgetUi(Context context, AppWidgetManager appWidgetManager, WidgetData widgetData, SharedPreferencesHelper pref, WidgetInitResult widgetInitResult, int widgetId) {
+        RemoteViews views = widgetInitResult.widgetRemoteViews();
+        WarningsRecordRoot root = widgetData.warnings();
+        List<LocationRecord> locations = widgetData.location();
 
-    @Override
-    protected String getConnectionErrorDescription() {
-        return AirplaneModeUtil.isAirplaneModeOn(context) ?
-                context.getResources().getString(R.string.airplane_mode_warnings) :
-                context.getResources().getString(R.string.automatic_retry_warnings);
-    }
-
-    @Override
-    protected void executeDataFetchingWithLatLon(String latlon, SharedPreferencesHelper pref, int widgetId) {
-
-        // if we have no location, do not update the widget
-        if (latlon == null || latlon.isEmpty()) {
-            Log.d("Warnings Widget Update", "No location data available, widget not updated");
-            return;
-        }
-
-        ExecutorService executorService = Executors.newFixedThreadPool(3);
-
-        // Get language string
-        String language = getLanguageString();
-
-        // temporary for testing.
-//        String announceUrl = "https://en-beta.ilmatieteenlaitos.fi/api/general/mobileannouncements";
-        String announceUrl = announcementsUrl;
-
-        // get warnings data bases on latlon
-        Future<JSONObject> warningsFuture = executorService.submit(() -> fetchWarnings(latlon, language));
-        // get announcements
-        Future<JSONArray> announcementsFuture = executorService.submit(() -> fetchJsonArray(announceUrl));
-        // get location name and region
-        Future<String> locationFuture = executorService.submit(() -> fetchLocationData(latlon));
-
-        executorService.submit(() -> {
-            JSONArray announcementsResult = null;
-            // Announcements failure is not critical
-            try { announcementsResult = announcementsFuture.get(); } catch(Exception e) {}
-            try {
-                JSONObject warningsResult = warningsFuture.get();
-                String locationResult = locationFuture.get();
-                var widgetData = new WidgetData(announcementsResult, null, warningsResult, locationResult);
-                onDataFetchingPostExecute(widgetData, null, pref, widgetId);
-            } catch (Exception e) {
-                Log.e("Warnings Widget Update", "Exception: " + e.getMessage());
-                showErrorView(
-                        context,
-                        pref,
-                        context.getResources().getString(R.string.failed_to_load_alerts),
-                        getConnectionErrorDescription(),
-                        widgetId
-                );
-            }
-        });
-    }
-
-    private String fetchLocationData(String latlon) {
-        // example: ?param=geoid,name,region,latitude,longitude,region,country,iso2,localtz&latlon=62.5,26.2&format=json
-        String url = weatherUrl
-                + "?param=geoid,name,region,latitude,longitude,region,country,iso2,localtz&latlon="
-                + latlon
-                + "&format=json";
-        try {
-            return fetchJsonString(url);
-        } catch (Exception e) {
-            Log.e("Warnings Widget Update", "fetchLocationData exception: " + e.getMessage());
-            return null;
-        }
-    }
-
-    protected JSONObject fetchWarnings(String latlon, String language) {
-
-        String url;
-        if (latlon != null && !latlon.isEmpty()) {
-            url = warningsUrl + "?latlon=" +
-                    latlon +
-                    "&country=" +
-                    language +
-                    "&who=mobileweather-widget-android";
-        } else {
-            return null;
-        }
+        if (root == null || locations == null || locations.isEmpty()) return;
 
         try {
-            String jsonString = fetchJsonString(url);
-            return new JSONObject(jsonString);
-        } catch (JSONException e) {
-            Log.e("Warnings Widget Update", "In base warnings fetchMainData exception: " + e.getMessage());
-            return null;
-        }
-    }
+            LocationRecord loc = locations.get(0);
 
-    @Override
-    protected void setWidgetUi(WidgetData widgetData, SharedPreferencesHelper pref, WidgetInitResult widgetInitResult, int widgetId) {
-
-        Log.d("Warnings Widget Update", "setWidgetUi called");
-
-        RemoteViews widgetRemoteViews = widgetInitResult.widgetRemoteViews();
-        JSONObject warningsJsonObj = widgetData.warnings();
-
-        if (warningsJsonObj == null || widgetData.location() == null) {
-            return;
-        }
-
-        try {
-            Gson gson = new Gson();
-
-            Type locationListType = new TypeToken<List<LocationRecord>>() {}.getType();
-            List<LocationRecord> locations = gson.fromJson(widgetData.location(), locationListType);
-            LocationRecord location = locations.get(0);
-
-            if (!location.iso2().equals("FI")) {
-                showErrorView(
-                        context,
-                        pref,
-                        context.getResources().getString(R.string.location_outside_data_area_title),
-                        context.getResources().getString(R.string.location_outside_data_area_description),
-                        widgetId
-                );
+            if (!"FI".equals(loc.iso2())) {
+                showErrorView(context, appWidgetManager, pref, 
+                    context.getString(R.string.location_outside_data_area_title),
+                    context.getString(R.string.location_outside_data_area_description),
+                    widgetId);
                 return;
             }
 
-            widgetRemoteViews.setTextViewText(R.id.locationNameTextView, location.name()+", ");
-            widgetRemoteViews.setTextViewText(R.id.locationRegionTextView, location.region());
+            views.setTextViewText(R.id.locationNameTextView, loc.name() + ", ");
+            views.setTextViewText(R.id.locationRegionTextView, loc.region());
 
-            WarningsRecordRoot warningsRecordRoot = gson.fromJson(warningsJsonObj.toString(), WarningsRecordRoot.class);
-
-            Log.d("Warnings Widget Update", "WarningsJson: " + warningsJsonObj);
-            Log.d("Warnings Widget Update", "WarningsRecordRoot: " + warningsRecordRoot);
-
-            // filter the warnings that only the ones remain if now is between the start and end date
-            // (perhaps npt this: or if the warning starts today later)
-            var warnings = warningsRecordRoot.data().warnings();
-            warnings = filterByValidity(warnings);
-            Collections.sort(warnings);
-
+            List<Warning> warnings = root.data().warnings().stream()
+                .filter(w -> "fi".equals(w.language()) && isValidDate(w))
+                .sorted()
+                .collect(Collectors.toList());
+            
             warnings = filterUnique(warnings);
 
-            // reset the warning icon layouts to GONE first
-            resetWidgetUi(widgetRemoteViews);
+            views.removeAllViews(R.id.warningIconContainer);
+            views.setViewVisibility(R.id.warningTimeFrameTextView, GONE);
 
-            widgetRemoteViews.removeAllViews(R.id.warningIconContainer);
+            int toShow = Math.min(warnings.size(), 2);
+            for (int i = 0; i < toShow; i++) {
+                Warning w = warnings.get(i);
+                RemoteViews icon = new RemoteViews(context.getPackageName(), R.layout.warning_icon);
+                
+                int bg = WarningsIconMapper.getCircleBackgroundResourceId(w.severity());
+                if (bg != 0) icon.setInt(R.id.warningIconBackgroundImageView, "setBackgroundResource", bg);
 
-            // show a maximum of 2 warnings
-            int amountOfWarnings = warnings.size();
-            int amountOfWarningsToShow = Math.min(amountOfWarnings, 2);
-
-            for (int i = 0; i < amountOfWarningsToShow; i++) {
-                RemoteViews warningIcon = new RemoteViews(context.getPackageName(), R.layout.warning_icon);
-                Warning warning = warnings.get(i);
-                String type = warning.type();
-                String severity = warning.severity();
-                String startTime = warning.duration().startTime();
-                String endTime = warning.duration().endTime();
-
-                int circleBackgroundResourceId = WarningsIconMapper.getCircleBackgroundResourceId(severity);
-                if (circleBackgroundResourceId != 0) {
-                    warningIcon.setInt(R.id.warningIconBackgroundImageView, "setBackgroundResource", circleBackgroundResourceId);
-                }
-
-                if (type.equals("seaWind") || type.equals("wind")) {
-                    int windIntensity = warning.physical().windIntensity();
-                    int windDirection = warning.physical().windDirection();
-
-                    warningIcon.setImageViewResource(R.id.warningIconImageView, R.drawable.sea_wind);
-                    // rotate the sea wind image view based on the wind direction number
-                    warningIcon.setFloat(R.id.warningIconImageView, "setRotation", windDirection - 180);
-                    // add the wind intensity text in front of the image view
-                    warningIcon.setViewVisibility(R.id.windIntensityTextView, VISIBLE);
-                    warningIcon.setTextViewText(R.id.windIntensityTextView, Integer.toString(windIntensity));
-                } else {
-                    int iconResourceId = WarningsIconMapper.getIconResourceId(type);
-                    Log.d("Warnings Widget Update", "IconResourceId: " + iconResourceId);
-                    if (iconResourceId != 0) {
-                        warningIcon.setImageViewResource(R.id.warningIconImageView, iconResourceId);
+                if ("seaWind".equals(w.type()) || "wind".equals(w.type())) {
+                    icon.setImageViewResource(R.id.warningIconImageView, R.drawable.sea_wind);
+                    if (w.physical() != null) {
+                        icon.setFloat(R.id.warningIconImageView, "setRotation", w.physical().windDirection() - 180);
+                        icon.setViewVisibility(R.id.windIntensityTextView, VISIBLE);
+                        icon.setTextViewText(R.id.windIntensityTextView, String.valueOf(Math.round(w.physical().windIntensity())));
                     }
+                } else {
+                    int resId = WarningsIconMapper.getIconResourceId(w.type());
+                    if (resId != 0) icon.setImageViewResource(R.id.warningIconImageView, resId);
                 }
+                views.addView(R.id.warningIconContainer, icon);
 
-                widgetRemoteViews.addView(R.id.warningIconContainer, warningIcon);
-
-                // if there is only one warning, set the warning 'title' to the first warning
-                if (amountOfWarningsToShow == 1) {
-                    String warningTitle = context.getString(WarningsTextMapper.getStringResourceId(type));
-                    widgetRemoteViews.setTextViewText(R.id.warningTextView, warningTitle);
-                    widgetRemoteViews.setViewVisibility(R.id.warningTimeFrameTextView, VISIBLE);
-                    widgetRemoteViews.setTextViewText(R.id.warningTimeFrameTextView, getFormattedWarningTimeFrame(startTime, endTime));
+                if (toShow == 1) {
+                    views.setTextViewText(R.id.warningTextView, context.getString(WarningsTextMapper.getStringResourceId(w.type())));
+                    views.setViewVisibility(R.id.warningTimeFrameTextView, VISIBLE);
+                    views.setTextViewText(R.id.warningTimeFrameTextView, getFormattedTimeFrame(w.duration().startTime(), w.duration().endTime()));
                 }
             }
 
-            // if there is more than one warning, set the warning text to "Warnings (amount)" and do show time frame
-            if (amountOfWarningsToShow > 1) {
-                String warningsText = context.getResources().getString(R.string.warnings) + " (" + amountOfWarnings + ")";
-                widgetRemoteViews.setTextViewText(R.id.warningTextView, warningsText);
+            if (toShow > 1) {
+                views.setTextViewText(R.id.warningTextView, context.getString(R.string.warnings) + " (" + warnings.size() + ")");
+            } else if (toShow == 0) {
+                views.setTextViewText(R.id.warningTextView, "");
+                RemoteViews empty = new RemoteViews(context.getPackageName(), R.layout.custom_text_layout);
+                empty.setTextViewText(R.id.customTextView, context.getString(R.string.no_warnings));
+                views.addView(R.id.warningIconContainer, empty);
             }
 
-            // if there are no warnings, show "No warnings"
-            if (amountOfWarningsToShow == 0) {
-                widgetRemoteViews.setTextViewText(R.id.warningTextView, "");
-                RemoteViews customTextView = new RemoteViews(context.getPackageName(), R.layout.custom_text_layout);
-                customTextView.setTextViewText(R.id.customTextView, context.getResources().getString(R.string.no_warnings));
-                widgetRemoteViews.addView(R.id.warningIconContainer, customTextView);
-            }
-
-            // Crisis view
-            showCrisisViewIfNeeded(widgetData.announcements(), widgetRemoteViews, pref, false, true);
-            appWidgetManager.updateAppWidget(widgetId, widgetRemoteViews);
+            appWidgetManager.updateAppWidget(widgetId, views);
             pref.saveLong(WIDGET_UI_UPDATED, System.currentTimeMillis());
         } catch (Exception e) {
-            Log.e("Warnings Widget Update", "In base warnings setWidgetUi exception: " + e.getMessage());
-            showErrorView(
-                    context,
-                    pref,
-                    context.getResources().getString(R.string.update_failed),
-                    getConnectionErrorDescription(),
-                    widgetId
-            );
+            Log.e(TAG, "Warnings UI update failed", e);
         }
     }
 
-    protected boolean isValidDate(Warning warning) {
-        TimeZone timeZone = TimeZone.getTimeZone("Europe/Helsinki");
-        TimeZone utc = TimeZone.getTimeZone("UTC");
-        SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault());
-        dateFormatter.setTimeZone(utc);
-        String startTime = warning.duration().startTime();
-        Date startDate;
-
+    protected boolean isValidDate(Warning w) {
         try {
-            startDate = dateFormatter.parse(startTime);
+            SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+            df.setTimeZone(TimeZone.getTimeZone("UTC"));
+            Date start = df.parse(w.duration().startTime());
+            if (start == null) return false;
+            
+            Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("Europe/Helsinki"));
+            cal.setTime(start);
+            int year = cal.get(Calendar.YEAR);
+            int day = cal.get(Calendar.DAY_OF_YEAR);
+            
+            Calendar now = Calendar.getInstance(TimeZone.getTimeZone("Europe/Helsinki"));
+            return year == now.get(Calendar.YEAR) && day == now.get(Calendar.DAY_OF_YEAR);
         } catch (Exception e) {
             return false;
         }
-
-        if (startDate != null) {
-            Calendar warningStart = Calendar.getInstance();
-            warningStart.setTimeZone(timeZone);
-            warningStart.setTime(startDate);
-
-            Calendar startOfDay = Calendar.getInstance();
-            startOfDay.setTimeZone(timeZone);
-            startOfDay.set(Calendar.HOUR_OF_DAY, 0);
-            startOfDay.set(Calendar.MINUTE, 0);
-            startOfDay.set(Calendar.SECOND, 0);
-            startOfDay.set(Calendar.MILLISECOND, 0);
-
-            Calendar endOfDay = Calendar.getInstance();
-            endOfDay.setTimeZone(timeZone);
-            endOfDay.set(Calendar.HOUR_OF_DAY, 23);
-            endOfDay.set(Calendar.MINUTE, 59);
-            endOfDay.set(Calendar.SECOND, 59);
-            endOfDay.set(Calendar.MILLISECOND, 999);
-
-            return warningStart.after(startOfDay) && warningStart.before(endOfDay);
-        }
-
-        return false;
     }
 
-    @SuppressLint("NewApi")
-    protected List<Warning> filterByValidity(List<Warning> warnings) throws ParseException {
-        var items = warnings.stream().filter(warning -> Objects.equals(warning.language(), "fi")).collect(Collectors.toList());
-        items = items.stream().filter(this::isValidDate).collect(Collectors.toList());
-        return items;
-    }
-
-    @SuppressLint("NewApi")
     protected List<Warning> filterUnique(List<Warning> warnings) {
-        List<Warning> processed = new ArrayList<>();
-        Iterator<Warning> iterator = warnings.iterator();
-        while (iterator.hasNext()) {
-            Warning current = iterator.next();
-            boolean contains = processed.stream().anyMatch(item ->
-                Objects.equals(item.type(), current.type()) && Objects.equals(item.severity(), current.severity())
-            );
-            if (!contains) {
-                processed.add(current);
+        List<Warning> result = new ArrayList<>();
+        for (Warning w : warnings) {
+            if (result.stream().noneMatch(r -> r.type().equals(w.type()) && r.severity().equals(w.severity()))) {
+                result.add(w);
             }
         }
-
-        return processed;
+        return result;
     }
 
-    private void resetWidgetUi(RemoteViews widgetRemoteViews) {
-        for (int i = 0; i < 3; i++) {
-            int warningIconLayoutId = context.getResources().getIdentifier("warningIconLayout" + i, "id", context.getPackageName());
-            widgetRemoteViews.setViewVisibility(warningIconLayoutId, GONE);
-        }
-        widgetRemoteViews.setViewVisibility(R.id.warningTimeFrameTextView, GONE);
-    }
-
-    protected String getFormattedWarningTimeFrame(String startTime, String endTime) throws ParseException {
-        // Define the input formatter
-        SimpleDateFormat inputFormatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault());
-        inputFormatter.setTimeZone(TimeZone.getTimeZone("UTC"));
-        // Parse the time strings to Date
-        Date startDate = inputFormatter.parse(startTime);
-        Date endDate = inputFormatter.parse(endTime);
-
-        // Define the output formatter
-        SimpleDateFormat outputFormatter = new SimpleDateFormat("HH:mm", Locale.getDefault());
-        outputFormatter.setTimeZone(TimeZone.getTimeZone("Europe/Helsinki"));
-        SimpleDateFormat outputFormatterWithDate = new SimpleDateFormat("dd.MM. HH:mm", Locale.getDefault());
-        outputFormatterWithDate.setTimeZone(TimeZone.getTimeZone("Europe/Helsinki"));
-
-        if (startDate != null && !isToday(endDate.getTime())) {
-            return outputFormatterWithDate.format(startDate) + " - " + outputFormatterWithDate.format(endDate);
-        } else {
-            return outputFormatter.format(startDate) + " - " + outputFormatter.format(endDate);
-        }
-    }
-    @Override
-    protected void onDataFetchingPostExecute(WidgetData data, RemoteViews remoteViews, SharedPreferencesHelper pref, int widgetId) {
-        // Init widget, mainly layout initialization
-        WidgetInitResult widgetInitResult = initWidget(remoteViews, pref, widgetId);
-
-        var warnings = useNewOrStoredJsonObject(data != null ? data.warnings() : null, pref, widgetId);
-        if (warnings == null) {
-            Log.d("onDataFetchingPostExecute", "No warning data available");
-            showErrorView(
-                    context,
-                    pref,
-                    context.getResources().getString(R.string.failed_to_load_alerts),
-                    getConnectionErrorDescription(),
-                    widgetId
-            );
-            return;
-        }
-
-        var announcements = useNewOrStoredCrisisJsonObject(data != null ? data.announcements() : null, pref);
-
-        String location;
-
-        if (data.location() != null) {
-            location = data.location();
-            pref.saveString(PrefKey.WARNING_LOCATION, location);
-        } else {
-            location = pref.getString(PrefKey.WARNING_LOCATION, null);
-        }
-
-        setWidgetUi(
-            new WidgetData(announcements, null, warnings, location),
-            pref, widgetInitResult, widgetId
-        );
+    protected String getFormattedTimeFrame(String start, String end) throws ParseException {
+        SimpleDateFormat in = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+        in.setTimeZone(TimeZone.getTimeZone("UTC"));
+        Date d1 = in.parse(start);
+        Date d2 = in.parse(end);
+        
+        SimpleDateFormat out = new SimpleDateFormat(isToday(d2.getTime()) ? "HH:mm" : "dd.MM. HH:mm", Locale.getDefault());
+        out.setTimeZone(TimeZone.getTimeZone("Europe/Helsinki"));
+        return out.format(d1) + " - " + out.format(d2);
     }
 }

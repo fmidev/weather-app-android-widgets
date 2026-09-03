@@ -1,55 +1,54 @@
 package fi.fmi.mobileweather.widgets;
 
-record WidgetSetup(
+public record WidgetSetup(
         Location location,
         Weather weather,
         Warnings warnings,
         Announcements announcements,
         Layout layout
-) {}
+) {
+    public record Location(
+            DefaultLocation defaultLocation,
+            String apiUrl
+    ) {}
 
-record Location(
-        DefaultLocation defaultLocation,
-        String apiUrl
-) {}
+    public record DefaultLocation(
+            String name,
+            String area,
+            double lat,
+            double lon,
+            int id,
+            String country,
+            String timezone
+    ) {}
 
-record DefaultLocation(
-        String name,
-        String area,
-        int lat,
-        int lon,
-        int id,
-        String country,
-        String timezone
-) {}
+    public record Weather(
+            String apiUrl,
+            int interval,
+            boolean useCardinalsForWindDirection
+    ) {}
 
-record Weather(
-        String apiUrl,
-        int interval,
-        boolean useCardinalsForWindDirection
-) {}
+    public record Warnings(
+            String apiUrl,
+            int interval
+    ) {}
 
-record Warnings(
-        String apiUrl,
-        int interval
-) {}
+    public record Announcements(
+            boolean enabled,
+            Api api
+    ) {}
 
-record Announcements(
-        boolean enabled,
-        Api api
-) {}
+    public record Api(
+            String fi,
+            String en,
+            String sv
+    ) {}
 
-record Api(
-        String fi,
-        String en,
-        String sv
-) {}
+    public record Layout(
+            Logo logo
+    ) {}
 
-record Layout(
-        Logo logo
-) {}
-
-record Logo(
-        boolean enabled
-) {}
-
+    public record Logo(
+            boolean enabled
+    ) {}
+}

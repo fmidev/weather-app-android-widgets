@@ -6,62 +6,104 @@ import android.os.Bundle;
 import android.util.Log;
 import android.widget.RemoteViews;
 
+import java.util.List;
+
 import fi.fmi.mobileweather.widgets.enumeration.WidgetType;
+import fi.fmi.mobileweather.widgets.model.Announcement;
+import fi.fmi.mobileweather.widgets.model.ForecastItem;
+import fi.fmi.mobileweather.widgets.model.WidgetData;
+import fi.fmi.mobileweather.widgets.util.SharedPreferencesHelper;
+import static fi.fmi.mobileweather.widgets.model.PrefKey.LAYOUT_RES_ID;
+import static fi.fmi.mobileweather.widgets.model.PrefKey.WIDGET_UI_UPDATED;
+import static android.view.View.GONE;
+import static android.view.View.VISIBLE;
 
 public class SmallForecastWidgetProvider extends BaseWidgetProvider {
+    private static final String TAG = "SmallWidgetProvider";
 
     @Override
     protected WidgetType getWidgetType() {
         return WidgetType.WEATHER_FORECAST;
     }
 
-    // default layout resource ID
     @Override
     protected int getLayoutResourceId() {
-        // if Android 12 version or higher, the default layout is small
-        // (because the widget size is determined by the ...provider_info.xml)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             return R.layout.small_forecast_widget_layout;
         } else {
-            // for Android 11 and below, the default layout is xs
             return R.layout.xs_forecast_widget_layout;
         }
     }
 
-    // define here what happens when the user changes the widget size
     @Override
     public void onAppWidgetOptionsChanged(Context context, AppWidgetManager appWidgetManager, int appWidgetId, Bundle newOptions) {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions);
-
-        Log.d("Widget Update", "Options changed");
-
-        // Get the new widget size
         int minWidth = newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH);
         int minHeight = newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT);
-
-        // Determine the layout resource ID based on the new size
         int layoutId = getLayoutResourceIdForResize(minWidth, minHeight);
-
-        // Store the layout resource ID in shared preferences
-        saveLayoutResourceId(context, appWidgetId, layoutId);
-
-        // Update the widget layout without downloading new data
-        RemoteViews views = new RemoteViews(context.getPackageName(), layoutId);
-        updateAppWidgetWithoutDataDownload(context, appWidgetManager, appWidgetId, views);
+        SharedPreferencesHelper.getInstance(context, appWidgetId).saveInt(LAYOUT_RES_ID, layoutId);
+        updateAppWidget(context, appWidgetManager, appWidgetId);
     }
 
-    // TODO: needs to be tested well with all kind of devices:
     private int getLayoutResourceIdForResize(int minWidth, int minHeight) {
-        if (minWidth < 100) {
-            Log.d("Widget Update", "xs widget " + minWidth + "x" + minHeight);
-            return R.layout.xs_forecast_widget_layout;
-        } else if (minWidth < 250) {
-            Log.d("Widget Update", "Small widget " + minWidth + "x" + minHeight);
-            return R.layout.small_forecast_widget_layout;
-        } else {
-            Log.d("Widget Update", "Horizontal widget " + minWidth + "x" + minHeight);
-            return R.layout.horizontal_forecast_widget_layout;
+        if (minWidth < 100) return R.layout.xs_forecast_widget_layout;
+        if (minWidth < 250) return R.layout.small_forecast_widget_layout;
+        return R.layout.horizontal_forecast_widget_layout;
+    }
+
+    @Override
+    protected void setWidgetUi(Context context, AppWidgetManager manager, WidgetData data, SharedPreferencesHelper pref, WidgetInitResult initResult, int widgetId) {
+        RemoteViews views = initResult.widgetRemoteViews();
+        List<ForecastItem> forecastItems = data.forecast();
+
+        try {
+            if (forecastItems == null || forecastItems.isEmpty()) return;
+            
+            int index = -1;
+            long now = System.currentTimeMillis();
+            for (int i = 0; i < forecastItems.size(); i++) {
+                if (forecastItems.get(i).epochtime() * 1000 > now) {
+                    index = i;
+                    break;
+                }
+            }
+            if (index == -1) index = 0;
+            ForecastItem first = forecastItems.get(index);
+
+            views.setTextViewText(R.id.locationNameTextView, first.name() + ",");
+            views.setTextViewText(R.id.locationRegionTextView, first.region());
+            views.setTextViewText(R.id.temperatureTextView, String.valueOf(Math.round(first.temperature())));
+            views.setTextViewText(R.id.temperatureUnitTextView, "°");
+
+            int symbol = first.smartSymbol();
+            int iconRes = context.getResources().getIdentifier("s_" + symbol, "drawable", context.getPackageName());
+            views.setImageViewResource(R.id.weatherIconImageView, iconRes);
+
+            showCrisisViewIfNeeded(context, data.announcements(), views);
+
+            manager.updateAppWidget(widgetId, views);
+            pref.saveLong(WIDGET_UI_UPDATED, System.currentTimeMillis());
+        } catch (Exception e) {
+            Log.e(TAG, "UI Update failed", e);
         }
     }
 
+    private void showCrisisViewIfNeeded(Context context, List<Announcement> announcements, RemoteViews views) {
+        views.removeAllViews(R.id.crisisViewContainer);
+        if (announcements == null || announcements.isEmpty()) {
+            views.setViewVisibility(R.id.crisisViewContainer, GONE);
+            return;
+        }
+
+        for (Announcement ann : announcements) {
+            if ("Crisis".equals(ann.type())) {
+                RemoteViews crisisView = new RemoteViews(context.getPackageName(), R.layout.crisis_view);
+                crisisView.setTextViewText(R.id.crisisText, ann.content());
+                views.addView(R.id.crisisViewContainer, crisisView);
+                views.setViewVisibility(R.id.crisisViewContainer, VISIBLE);
+                return;
+            }
+        }
+        views.setViewVisibility(R.id.crisisViewContainer, GONE);
+    }
 }

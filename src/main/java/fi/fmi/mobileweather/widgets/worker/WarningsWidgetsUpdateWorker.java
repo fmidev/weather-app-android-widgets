@@ -14,6 +14,7 @@ import fi.fmi.mobileweather.widgets.MediumWarningsWidgetProvider;
 import fi.fmi.mobileweather.widgets.SmallWarningsWidgetProvider;
 
 public class WarningsWidgetsUpdateWorker extends Worker {
+    private static final String TAG = "WarningsWidgetsWorker";
 
     public WarningsWidgetsUpdateWorker(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
@@ -22,30 +23,18 @@ public class WarningsWidgetsUpdateWorker extends Worker {
     @NonNull
     @Override
     public Result doWork() {
-        // Perform the widget update here
-        Log.d("Widget Update", "Warnings widgets update trigger by WorkManager");
+        Log.d(TAG, "Triggering warnings updates via broadcast");
+        Context context = getApplicationContext();
 
-        // broadcast the update to the widget
-        broadcastUpdate();
+        sendUpdateBroadcast(context, SmallWarningsWidgetProvider.class);
+        sendUpdateBroadcast(context, MediumWarningsWidgetProvider.class);
 
-        // Return success or failure
         return Result.success();
     }
 
-    private void broadcastUpdate() {
-        Log.d("Widget Update", "Broadcasting warnings widgets update");
-
-        // ** Broadcast to all warnings widget providers which can receive ACTION_APPWIDGET_AUTO_UPDATE
-
-        // Create intents for each widget provider class
-        Intent smallWarningsWidgetIntent = new Intent(getApplicationContext(), SmallWarningsWidgetProvider.class)
-                .setAction(ACTION_APPWIDGET_AUTO_UPDATE);
-        Intent mediumWarningsWidgetIntent = new Intent(getApplicationContext(), MediumWarningsWidgetProvider.class)
-                .setAction(ACTION_APPWIDGET_AUTO_UPDATE);
-
-        // Send broadcasts
-        getApplicationContext().sendBroadcast(smallWarningsWidgetIntent);
-        getApplicationContext().sendBroadcast(mediumWarningsWidgetIntent);
+    private void sendUpdateBroadcast(Context context, Class<?> cls) {
+        Intent intent = new Intent(context, cls);
+        intent.setAction(ACTION_APPWIDGET_AUTO_UPDATE);
+        context.sendBroadcast(intent);
     }
-
 }
