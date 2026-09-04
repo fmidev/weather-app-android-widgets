@@ -2,7 +2,9 @@ package fi.fmi.mobileweather.widgets
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.os.Bundle
 import android.util.Log
+import android.util.TypedValue
 import android.view.View.GONE
 import android.view.View.VISIBLE
 import android.widget.RemoteViews
@@ -26,6 +28,16 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
         return R.layout.medium_forecast_widget_layout
     }
 
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        updateAppWidget(context, appWidgetManager, appWidgetId)
+    }
+
     private fun getTimestepCount(widgetWidth: Int): Double {
         val columnWidth = 52
         val margins = 32
@@ -42,8 +54,16 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
     ) {
         val views = widgetInitResult.widgetRemoteViews
         val forecastItems = widgetData.forecast
-        val width = appWidgetManager.getAppWidgetOptions(appWidgetId).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+        val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+        val width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+        val height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
         val timeStepCount = getTimestepCount(width)
+
+        val isTaller = height >= 90 // 4x2 mode or taller
+
+        val locationSp = if (isTaller) 16f else 13f
+        val timeSp = if (isTaller) 14f else 12f
+        val tempSp = if (isTaller) 16f else 13f
 
         try {
             if (forecastItems.isNullOrEmpty()) return
@@ -70,11 +90,17 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
                 if (i == firstFutureIndex) {
                     views.setTextViewText(R.id.locationNameTextView, "${forecast.name}, ")
                     views.setTextViewText(R.id.locationRegionTextView, forecast.region)
+
+                    views.setTextViewTextSize(R.id.locationNameTextView, TypedValue.COMPLEX_UNIT_SP, locationSp)
+                    views.setTextViewTextSize(R.id.locationRegionTextView, TypedValue.COMPLEX_UNIT_SP, locationSp)
                 }
 
                 val step = RemoteViews(context.packageName, R.layout.forecast_timestep)
                 step.setTextViewText(R.id.timeStepTimeTextView, getFormattedTime(forecast.localtime))
                 step.setTextViewText(R.id.temperatureTextView, "${forecast.temperature.roundToInt()}°")
+
+                step.setTextViewTextSize(R.id.timeStepTimeTextView, TypedValue.COMPLEX_UNIT_SP, timeSp)
+                step.setTextViewTextSize(R.id.temperatureTextView, TypedValue.COMPLEX_UNIT_SP, tempSp)
 
                 val symbol = forecast.smartSymbol
                 val iconRes = context.resources.getIdentifier("s_$symbol", "drawable", context.packageName)
