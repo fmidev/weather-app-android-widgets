@@ -2,6 +2,7 @@ package fi.fmi.mobileweather.widgets
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
 import android.util.TypedValue
@@ -9,7 +10,6 @@ import android.view.View.GONE
 import android.view.View.VISIBLE
 import android.widget.RemoteViews
 import fi.fmi.mobileweather.widgets.enumeration.WidgetType
-import fi.fmi.mobileweather.widgets.model.ForecastItem
 import fi.fmi.mobileweather.widgets.model.PrefKey.WIDGET_UI_UPDATED
 import fi.fmi.mobileweather.widgets.model.WidgetData
 import fi.fmi.mobileweather.widgets.util.SharedPreferencesHelper
@@ -56,14 +56,20 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
         val forecastItems = widgetData.forecast
         val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
         val width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
-        val height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+        val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+        val height = if (context.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeight)
+        } else {
+            minHeight
+        }
         val timeStepCount = getTimestepCount(width)
 
-        val isTaller = height >= 90 // 4x2 mode or taller
+        // Grow text with the available height while leaving room for weather icons.
+        val textScale = ((height - 90) / 60f).coerceIn(0f, 1f)
 
-        val locationSp = if (isTaller) 16f else 13f
-        val timeSp = if (isTaller) 14f else 12f
-        val tempSp = if (isTaller) 16f else 13f
+        val locationSp = 13f + 7f * textScale
+        val timeSp = 12f + 6f * textScale
+        val tempSp = 13f + 9f * textScale
 
         try {
             if (forecastItems.isNullOrEmpty()) return
@@ -95,7 +101,7 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
                     views.setTextViewTextSize(R.id.locationRegionTextView, TypedValue.COMPLEX_UNIT_SP, locationSp)
                 }
 
-                val step = RemoteViews(context.packageName, R.layout.forecast_timestep)
+                val step = RemoteViews(context.packageName, R.layout.medium_forecast_resizable_timestep)
                 step.setTextViewText(R.id.timeStepTimeTextView, getFormattedTime(forecast.localtime))
                 step.setTextViewText(R.id.temperatureTextView, "${forecast.temperature.roundToInt()}°")
 
@@ -106,14 +112,19 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
                 val iconRes = context.resources.getIdentifier("s_$symbol", "drawable", context.packageName)
                 step.setImageViewResource(R.id.weatherIconImageView, iconRes)
 
-                if (i == (firstFutureIndex + timeStepCount - 1).toInt()) {
+                if (i == maxIndex - 1) {
                     step.setViewVisibility(R.id.forecastBorder, GONE)
                 }
                 views.addView(R.id.hourForecastRowLayout, step)
             }
 
+            views.removeAllViews(R.id.crisisViewContainer)
             views.setViewVisibility(R.id.crisisViewContainer, GONE)
+            views.setViewVisibility(R.id.locationNameTextView, VISIBLE)
+            views.setViewVisibility(R.id.locationRegionTextView, VISIBLE)
+
             val announcements = widgetData.announcements
+
             if (announcements != null) {
                 for (ann in announcements) {
                     if ("Crisis" == ann.type) {

@@ -56,6 +56,8 @@ open class MediumWarningsWidgetProvider : BaseWarningsWidgetProvider() {
 
             views.setTextViewText(R.id.locationNameTextView, "${loc.name}, ")
             views.setTextViewText(R.id.locationRegionTextView, loc.region)
+            views.setViewVisibility(R.id.locationNameTextView, VISIBLE)
+            views.setViewVisibility(R.id.locationRegionTextView, VISIBLE)
 
             val rawWarnings = root.data?.warnings ?: emptyList()
             var warnings = rawWarnings.filter { w -> "fi" == w.language && isValidDate(w) }
@@ -107,6 +109,7 @@ open class MediumWarningsWidgetProvider : BaseWarningsWidgetProvider() {
             views.setTextViewText(R.id.updateTime, "${context.getString(R.string.updated)} $formattedTime")
 
             val announcements = data.announcements
+
             views.setViewVisibility(R.id.crisisViewContainer, GONE)
             if (announcements != null) {
                 for (ann in announcements) {
@@ -115,8 +118,6 @@ open class MediumWarningsWidgetProvider : BaseWarningsWidgetProvider() {
                         crisis.setTextViewText(R.id.crisisText, ann.content)
                         views.addView(R.id.crisisViewContainer, crisis)
                         views.setViewVisibility(R.id.crisisViewContainer, VISIBLE)
-                        views.setViewVisibility(R.id.locationNameTextView, GONE)
-                        views.setViewVisibility(R.id.locationRegionTextView, GONE)
                         break
                     }
                 }
