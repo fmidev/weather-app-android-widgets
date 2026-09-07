@@ -1,0 +1,7 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Only run tests locally, not in CI.
+if [ "$GITHUB_ACTIONS" != "true" ]; then
+  (cd .. && ./gradlew :widgets:testDebugUnitTest)
+fi
