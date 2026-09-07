@@ -23,6 +23,7 @@ import fi.fmi.mobileweather.widgets.model.Announcement
 import fi.fmi.mobileweather.widgets.model.ForecastItem
 import fi.fmi.mobileweather.widgets.model.LocationConstants.CURRENT_LOCATION
 import fi.fmi.mobileweather.widgets.model.LocationRecord
+import fi.fmi.mobileweather.widgets.model.PrefKey.FAVORITE_LATLON
 import fi.fmi.mobileweather.widgets.model.PrefKey.GRADIENT_BACKGROUND
 import fi.fmi.mobileweather.widgets.model.PrefKey.LATEST_JSON
 import fi.fmi.mobileweather.widgets.model.PrefKey.LATEST_JSON_UPDATED
@@ -77,7 +78,8 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
         if (selectedLocation == CURRENT_LOCATION) {
             handleCurrentLocationUpdate(context, appWidgetManager, appWidgetId, pref)
         } else if (selectedLocation != Int.MAX_VALUE) {
-            fetchDataAndUpdate(context, appWidgetManager, appWidgetId, null, selectedLocation)
+            val latlon = pref.getString(FAVORITE_LATLON, null)
+            fetchDataAndUpdate(context, appWidgetManager, appWidgetId, latlon)
         }
     }
 
@@ -96,13 +98,13 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
             override fun onNewLocationAvailable(location: Location) {
                 val latlon = getLatLonString(location)
                 pref.saveString("latlon", latlon)
-                fetchDataAndUpdate(context, appWidgetManager, appWidgetId, latlon, null)
+                fetchDataAndUpdate(context, appWidgetManager, appWidgetId, latlon)
             }
 
             override fun onLocationFailed() {
                 val storedLatLon = pref.getString("latlon", null)
                 if (storedLatLon != null) {
-                    fetchDataAndUpdate(context, appWidgetManager, appWidgetId, storedLatLon, null)
+                    fetchDataAndUpdate(context, appWidgetManager, appWidgetId, storedLatLon)
                 } else {
                     showLocationErrorView(context, appWidgetManager, pref, appWidgetId)
                 }
@@ -114,8 +116,7 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int,
-        latlon: String?,
-        geoId: Int?
+        latlon: String?
     ) {
         val callback = object : WeatherRepository.WeatherCallback {
             override fun onSuccess(data: WidgetData) {
@@ -141,10 +142,15 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
             }
         }
 
+        if (latlon.isNullOrBlank()) {
+            callback.onError(IllegalArgumentException("Widget coordinates not available"))
+            return
+        }
+
         if (getWidgetType() == WidgetType.WARNINGS) {
-            weatherRepository.fetchWarningsData(context, latlon ?: "", callback)
+            weatherRepository.fetchWarningsData(context, latlon, callback)
         } else {
-            weatherRepository.fetchForecastData(context, latlon, geoId, callback)
+            weatherRepository.fetchForecastData(context, latlon, callback)
         }
     }
 

@@ -32,8 +32,7 @@ class WeatherRepository {
 
     fun fetchForecastData(
         context: Context,
-        latlon: String?,
-        geoId: Int?,
+        latlon: String,
         callback: WeatherCallback
     ) {
         val setup = WidgetSetupManager.getWidgetSetup(context)
@@ -48,14 +47,8 @@ class WeatherRepository {
 
         executorService.submit {
             try {
-                val finalGeoId = if (geoId != null) {
-                    geoId.toString()
-                } else if (latlon != null && weatherUrl != null) {
-                    fetchGeoid(weatherUrl, latlon)
-                } else null
-
                 val forecastFuture: Future<List<ForecastItem>?> = executorService.submit<List<ForecastItem>?> {
-                    if (weatherUrl != null) fetchForecast(weatherUrl, finalGeoId, latlon, language) else null
+                    if (weatherUrl != null) fetchForecast(weatherUrl, latlon, language) else null
                 }
                 val announcementsFuture: Future<List<Announcement>?> = executorService.submit<List<Announcement>?> {
                     fetchAnnouncements(announcementsUrl)
@@ -136,25 +129,11 @@ class WeatherRepository {
         return language
     }
 
-    private fun fetchGeoid(weatherUrl: String, latlon: String): String? {
-        val url = "$weatherUrl?param=geoid&latlon=$latlon&format=json"
-        val json = fetchJsonString(url) ?: return null
-        return try {
-            val type = object : TypeToken<List<Map<String, String>>>() {}.type
-            val list: List<Map<String, String>>? = gson.fromJson(json, type)
-            if (!list.isNullOrEmpty()) list[0]["geoid"] else null
-        } catch (_: Exception) {
-            null
-        }
-    }
+    internal fun fetchForecast(weatherUrl: String, latlon: String, language: String): List<ForecastItem>? {
+        if (latlon.isBlank()) return null
 
-    private fun fetchForecast(weatherUrl: String, geoid: String?, latlon: String?, language: String): List<ForecastItem>? {
         val params = "geoid,epochtime,localtime,utctime,name,region,iso2,temperature,feelsLike,smartSymbol,windDirection,windSpeedMS,windCompass8"
-        val url = if (!geoid.isNullOrEmpty()) {
-            "$weatherUrl?geoid=$geoid&endtime=data&format=json&attributes=geoid&lang=$language&param=$params"
-        } else if (!latlon.isNullOrEmpty()) {
-            "$weatherUrl?latlon=$latlon&endtime=data&format=json&attributes=geoid&lang=$language&param=$params"
-        } else return null
+        val url = "$weatherUrl?latlon=$latlon&endtime=data&format=json&attributes=geoid&lang=$language&param=$params"
 
         val json = fetchJsonString(url) ?: return null
         return try {
