@@ -28,6 +28,7 @@ import fi.fmi.mobileweather.widgets.model.PrefKey.LATEST_JSON
 import fi.fmi.mobileweather.widgets.model.PrefKey.LATEST_JSON_UPDATED
 import fi.fmi.mobileweather.widgets.model.PrefKey.LAYOUT_RES_ID
 import fi.fmi.mobileweather.widgets.model.PrefKey.SELECTED_LOCATION
+import fi.fmi.mobileweather.widgets.model.PrefKey.TRANSPARENT_BACKGROUND
 import fi.fmi.mobileweather.widgets.model.PrefKey.WARNING_LOCATION
 import fi.fmi.mobileweather.widgets.model.PrefKey.WIDGET_UI_UPDATED
 import fi.fmi.mobileweather.widgets.model.WarningsRecordRoot
@@ -36,6 +37,7 @@ import fi.fmi.mobileweather.widgets.repository.WeatherRepository
 import fi.fmi.mobileweather.widgets.util.AirplaneModeUtil
 import fi.fmi.mobileweather.widgets.util.SharedPreferencesHelper
 import fi.fmi.mobileweather.widgets.util.SingleShotLocationProvider
+import fi.fmi.mobileweather.widgets.util.WidgetBackground
 import java.util.Locale
 
 abstract class BaseWidgetProvider : AppWidgetProvider() {
@@ -238,17 +240,21 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
         remoteViews.setOnClickPendingIntent(R.id.mainLinearLayout, pi)
 
         val nightMode = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        val gradient = nightMode == Configuration.UI_MODE_NIGHT_YES && pref.getInt(GRADIENT_BACKGROUND, 0) == 1
+        val backgroundResource = WidgetBackground.getResourceId(
+            isNightMode = nightMode == Configuration.UI_MODE_NIGHT_YES,
+            gradientEnabled = pref.getInt(GRADIENT_BACKGROUND, 0) == 1,
+            transparentEnabled = pref.getInt(TRANSPARENT_BACKGROUND, 0) == 1
+        )
         remoteViews.setInt(
             R.id.mainLinearLayout,
             "setBackgroundResource",
-            if (gradient) R.drawable.gradient_background else R.color.widgetBackground
+            backgroundResource
         )
 
         remoteViews.setViewVisibility(R.id.normalLayout, VISIBLE)
         remoteViews.setViewVisibility(R.id.errorLayout, GONE)
 
-        return WidgetInitResult(remoteViews, gradient)
+        return WidgetInitResult(remoteViews, backgroundResource == R.drawable.gradient_background)
     }
 
     private fun showLocationErrorView(
@@ -280,14 +286,11 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
         if (updated > 0 && System.currentTimeMillis() - updated < validity) return
 
         val views = RemoteViews(context.packageName, getLayoutResourceId())
+        initWidget(context, views, pref, widgetId)
         views.setViewVisibility(R.id.errorLayout, VISIBLE)
         views.setViewVisibility(R.id.normalLayout, GONE)
         views.setTextViewText(R.id.errorHeaderTextView, error1)
         views.setTextViewText(R.id.errorBodyTextView, error2)
-
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-        val pi = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
-        views.setOnClickPendingIntent(R.id.mainLinearLayout, pi)
 
         manager.updateAppWidget(widgetId, views)
     }

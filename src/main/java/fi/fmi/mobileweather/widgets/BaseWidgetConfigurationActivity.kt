@@ -20,8 +20,6 @@ import android.view.LayoutInflater
 import android.view.View.GONE
 import android.view.View.VISIBLE
 import android.widget.Button
-import android.widget.CheckBox
-import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
@@ -33,6 +31,7 @@ import fi.fmi.mobileweather.widgets.model.LocationConstants.CURRENT_LOCATION
 import fi.fmi.mobileweather.widgets.model.PrefKey.FAVORITE_LATLON
 import fi.fmi.mobileweather.widgets.model.PrefKey.GRADIENT_BACKGROUND
 import fi.fmi.mobileweather.widgets.model.PrefKey.SELECTED_LOCATION
+import fi.fmi.mobileweather.widgets.model.PrefKey.TRANSPARENT_BACKGROUND
 import fi.fmi.mobileweather.widgets.util.SharedPreferencesHelper
 import org.json.JSONArray
 import org.json.JSONException
@@ -91,12 +90,18 @@ abstract class BaseWidgetConfigurationActivity : Activity() {
         setAddFavoriteLocationsClickListener()
 
         val currentNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        val themeOptions = findViewById<LinearLayout>(R.id.themeOptionsContainer)
-        if (currentNightMode == Configuration.UI_MODE_NIGHT_NO) {
-            themeOptions.visibility = GONE
-        } else {
-            themeOptions.visibility = VISIBLE
-        }
+        val gradientVisibility = if (currentNightMode == Configuration.UI_MODE_NIGHT_YES) VISIBLE else GONE
+        findViewById<RadioButton>(R.id.gradientBackgroundRadioButton).visibility = gradientVisibility
+        findViewById<TextView>(R.id.gradientBackgroundLimitations).visibility = gradientVisibility
+
+        val pref = SharedPreferencesHelper.getInstance(this, appWidgetId)
+        findViewById<RadioGroup>(R.id.themeRadioGroup).check(
+            when {
+                pref.getInt(TRANSPARENT_BACKGROUND, 0) == 1 -> R.id.transparentBackgroundRadioButton
+                gradientVisibility == VISIBLE && pref.getInt(GRADIENT_BACKGROUND, 0) == 1 -> R.id.gradientBackgroundRadioButton
+                else -> R.id.defaultBackgroundRadioButton
+            }
+        )
     }
 
     private fun setLocationFavoritesButtons() {
@@ -214,9 +219,9 @@ abstract class BaseWidgetConfigurationActivity : Activity() {
             pref.saveString(FAVORITE_LATLON, latlon)
         }
 
-        val gradientBackgroundCheckbox = findViewById<CheckBox>(R.id.gradientBackgroundCheckbox)
-        val gradientBackgroundEnabled = gradientBackgroundCheckbox.isChecked
-        pref.saveInt(GRADIENT_BACKGROUND, if (gradientBackgroundEnabled) 1 else 0)
+        val selectedTheme = findViewById<RadioGroup>(R.id.themeRadioGroup).checkedRadioButtonId
+        pref.saveInt(GRADIENT_BACKGROUND, if (selectedTheme == R.id.gradientBackgroundRadioButton) 1 else 0)
+        pref.saveInt(TRANSPARENT_BACKGROUND, if (selectedTheme == R.id.transparentBackgroundRadioButton) 1 else 0)
 
         val appWidgetIds = getIntent().getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS)
         val updateIntent = Intent(ACTION_APPWIDGET_UPDATE).setClass(context, getWidgetProviderClass())

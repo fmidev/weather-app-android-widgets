@@ -8,5 +8,6 @@ object PrefKey {
     const val FAVORITE_LATLON = "favorite_latlon"
     const val WIDGET_UI_UPDATED = "widget_ui_updated"
     const val GRADIENT_BACKGROUND = "gradient_background"
+    const val TRANSPARENT_BACKGROUND = "transparent_background"
     const val WARNING_LOCATION = "warning_location"
 }

@@ -130,6 +130,8 @@
     <string name="s_71">Yksittäisiä ukkoskuuroja</string>
     <string name="s_74">Paikoin ukkoskuuroja</string>
     <string name="s_77">Ukkoskuuroja</string>
+    <string name="default_background">Oletus</string>
+    <string name="transparent_background">Läpinäkyvä tausta</string>
     <string name="gradient_background">Liukuväritausta</string>
     <string name="gradient_background_limitations">Tumman tilan täytyy olla valittuna järjestelmän asetuksissa, jotta liukuväritausta toimii.</string>
     <string name="location_services_not_allowed">"Paikannusta ei ole sallittu. Salli paikannus asetuksista."</string>
