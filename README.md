@@ -35,3 +35,17 @@ The submodule's `pre-push` hook runs `:widgets:testDebugUnitTest` using the main
 app's Android Gradle project. A failed test blocks the push. The hook requires
 the same Java and Android SDK setup as the app build and skips tests in GitHub
 Actions. Run the installation command again after a fresh clone.
+
+## Unit tests
+
+Run the tests from `android/widgets`:
+
+```sh
+../gradlew -p .. :widgets:testDebugUnitTest
+```
+
+or with output to console
+
+```
+../gradlew :widgets:testDebugUnitTest --console=plain --rerun
+```

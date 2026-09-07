@@ -110,6 +110,7 @@ open class MediumWarningsWidgetProvider : BaseWarningsWidgetProvider() {
 
             val announcements = data.announcements
 
+            views.removeAllViews(R.id.crisisViewContainer)
             views.setViewVisibility(R.id.crisisViewContainer, GONE)
             if (announcements != null) {
                 for (ann in announcements) {
