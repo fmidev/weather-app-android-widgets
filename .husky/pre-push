@@ -3,7 +3,7 @@
 
 # Only run tests locally, not in CI.
 if [ "$GITHUB_ACTIONS" != "true" ]; then
-  (cd .. && ./gradlew :widgets:testDebugUnitTest)
+  (cd .. && ./gradlew :widgets:testDebugUnitTest) || exit 1
   # Only run lint and tests locally, not in CI
 
   # Checks secret leaks in the commits that are being pushed
