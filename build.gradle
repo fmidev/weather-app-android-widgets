@@ -67,6 +67,9 @@ dependencies {
     implementation project(':react-native-async-storage_async-storage')
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.16.1'
+    testImplementation 'androidx.work:work-testing:2.7.1'
+    // Inspect persisted intervals in WorkManager's test database.
+    testImplementation 'androidx.room:room-runtime:2.2.5'
     // The host app normally supplies these themes; resource tests link them independently.
     testImplementation 'com.google.android.material:material:1.13.0'
     testImplementation 'androidx.core:core-splashscreen:1.0.1'

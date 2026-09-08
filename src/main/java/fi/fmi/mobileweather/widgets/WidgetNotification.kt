@@ -22,6 +22,33 @@ object WidgetNotification {
     const val WARNINGS_WIDGET_UPDATE_WORK = "WarningsWidgetUpdate"
     const val DEFAULT_INTERVAL = 15
 
+    private fun providersFor(widgetType: WidgetType): List<Class<out AppWidgetProvider>> = when (widgetType) {
+        WidgetType.WEATHER_FORECAST -> listOf(
+            SmallForecastWidgetProvider::class.java,
+            MediumForecastWidgetProvider::class.java,
+            LargeForecastWidgetProvider::class.java
+        )
+        WidgetType.WARNINGS -> listOf(
+            SmallWarningsWidgetProvider::class.java,
+            MediumWarningsWidgetProvider::class.java
+        )
+    }
+
+    // Also restores scheduling for widgets installed before periodic updates were enabled.
+    @JvmStatic
+    fun scheduleActiveWidgetUpdates(context: Context) {
+        for (widgetType in WidgetType.values()) {
+            val provider = providersFor(widgetType).firstOrNull {
+                getActiveWidgetIds(context, it).isNotEmpty()
+            }
+            if (provider != null) {
+                scheduleWidgetUpdate(context, provider, widgetType)
+            } else {
+                clearWidgetUpdate(context, widgetType)
+            }
+        }
+    }
+
     @JvmStatic
     fun getActiveWidgetIds(context: Context, providerClass: Class<out AppWidgetProvider>): IntArray {
         val appWidgetManager = AppWidgetManager.getInstance(context)
@@ -47,7 +74,8 @@ object WidgetNotification {
     }
 
     private fun scheduleWeatherWidgetUpdate(context: Context, constraints: Constraints) {
-        val weatherRepeatInterval = WidgetSetupManager.getWidgetSetup(context)?.weather?.interval ?: DEFAULT_INTERVAL
+        val weatherRepeatInterval = (WidgetSetupManager.getWidgetSetup(context)?.weather?.interval ?: DEFAULT_INTERVAL)
+            .coerceAtLeast(DEFAULT_INTERVAL)
 
         val weatherUpdateRequest = PeriodicWorkRequest.Builder(
             WeatherWidgetsUpdateWorker::class.java,
@@ -60,7 +88,7 @@ object WidgetNotification {
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             WEATHER_WIDGET_UPDATE_WORK,
-            ExistingPeriodicWorkPolicy.REPLACE,
+            ExistingPeriodicWorkPolicy.KEEP,
             weatherUpdateRequest
         )
 
@@ -68,7 +96,8 @@ object WidgetNotification {
     }
 
     private fun scheduleWarningsWidgetUpdate(context: Context, constraints: Constraints) {
-        val warningsRepeatInterval = WidgetSetupManager.getWidgetSetup(context)?.warnings?.interval ?: DEFAULT_INTERVAL
+        val warningsRepeatInterval = (WidgetSetupManager.getWidgetSetup(context)?.warnings?.interval ?: DEFAULT_INTERVAL)
+            .coerceAtLeast(DEFAULT_INTERVAL)
 
         val weatherUpdateRequest = PeriodicWorkRequest.Builder(
             WarningsWidgetsUpdateWorker::class.java,
@@ -81,7 +110,7 @@ object WidgetNotification {
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             WARNINGS_WIDGET_UPDATE_WORK,
-            ExistingPeriodicWorkPolicy.REPLACE,
+            ExistingPeriodicWorkPolicy.KEEP,
             weatherUpdateRequest
         )
 
@@ -90,6 +119,9 @@ object WidgetNotification {
 
     @JvmStatic
     fun clearWidgetUpdate(context: Context, widgetType: WidgetType) {
+        // All sizes of the same widget type share one periodic job.
+        if (providersFor(widgetType).any { getActiveWidgetIds(context, it).isNotEmpty() }) return
+
         when (widgetType) {
             WidgetType.WEATHER_FORECAST -> {
                 WorkManager.getInstance(context).cancelAllWorkByTag(WEATHER_WIDGET_UPDATE_WORK)

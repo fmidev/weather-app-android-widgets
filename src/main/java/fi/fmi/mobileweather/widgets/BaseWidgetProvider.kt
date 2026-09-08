@@ -53,9 +53,23 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         val action = intent.action
-        if (WidgetNotification.ACTION_APPWIDGET_AUTO_UPDATE == action || AppWidgetManager.ACTION_APPWIDGET_UPDATE == action) {
+        // AppWidgetProvider already handles updates with explicit IDs in super.onReceive.
+        if (WidgetNotification.ACTION_APPWIDGET_AUTO_UPDATE == action ||
+            (AppWidgetManager.ACTION_APPWIDGET_UPDATE == action &&
+                intent.getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS)?.isNotEmpty() != true)
+        ) {
             triggerUpdate(context)
         }
+    }
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        WidgetNotification.scheduleWidgetUpdate(context, javaClass, getWidgetType())
+    }
+
+    override fun onDisabled(context: Context) {
+        super.onDisabled(context)
+        WidgetNotification.clearWidgetUpdate(context, getWidgetType())
     }
 
     private fun triggerUpdate(context: Context) {
@@ -66,6 +80,7 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        WidgetNotification.scheduleWidgetUpdate(context, javaClass, getWidgetType())
         for (widgetId in appWidgetIds) {
             updateAppWidget(context, appWidgetManager, widgetId)
         }

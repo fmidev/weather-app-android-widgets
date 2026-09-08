@@ -223,9 +223,8 @@ abstract class BaseWidgetConfigurationActivity : Activity() {
         pref.saveInt(GRADIENT_BACKGROUND, if (selectedTheme == R.id.gradientBackgroundRadioButton) 1 else 0)
         pref.saveInt(TRANSPARENT_BACKGROUND, if (selectedTheme == R.id.transparentBackgroundRadioButton) 1 else 0)
 
-        val appWidgetIds = getIntent().getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS)
         val updateIntent = Intent(ACTION_APPWIDGET_UPDATE).setClass(context, getWidgetProviderClass())
-        updateIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds)
+        updateIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
         sendBroadcast(updateIntent)
 
         val resultValue = Intent()
