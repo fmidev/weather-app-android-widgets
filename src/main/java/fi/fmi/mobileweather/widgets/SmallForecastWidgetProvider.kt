@@ -76,7 +76,10 @@ open class SmallForecastWidgetProvider : BaseWidgetProvider() {
                     break
                 }
             }
-            if (index == -1) index = 0
+            if (index == -1) {
+                showErrorView(context, manager, pref, context.getString(R.string.update_failed), "", widgetId)
+                return
+            }
             val first = forecastItems[index]
 
             views.setTextViewText(R.id.locationNameTextView, "${first.name},")
