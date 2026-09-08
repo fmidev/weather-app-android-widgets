@@ -11,6 +11,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -19,12 +20,16 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View.GONE
 import android.view.View.VISIBLE
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.reactnativecommunity.asyncstorage.AsyncLocalStorageUtil
 import com.reactnativecommunity.asyncstorage.ReactDatabaseSupplier
 import fi.fmi.mobileweather.widgets.model.LocationConstants.CURRENT_LOCATION
@@ -52,7 +57,9 @@ abstract class BaseWidgetConfigurationActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(getLayoutResourceId())
+        configureWindowInsets()
         setResult(RESULT_CANCELED)
 
         if (savedInstanceState != null) {
@@ -71,6 +78,40 @@ abstract class BaseWidgetConfigurationActivity : Activity() {
         }
 
         initViews()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun configureWindowInsets() {
+        // The configuration layout has a white background in both light and dark mode.
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Color.TRANSPARENT
+        } else {
+            Color.BLACK
+        }
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
+        }
+
+        val root = findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+        val initialLeft = root.paddingLeft
+        val initialTop = root.paddingTop
+        val initialRight = root.paddingRight
+        val initialBottom = root.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val safeInsets = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            view.setPadding(
+                initialLeft + safeInsets.left,
+                initialTop + safeInsets.top,
+                initialRight + safeInsets.right,
+                initialBottom + safeInsets.bottom
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
     }
 
     override fun onResume() {
