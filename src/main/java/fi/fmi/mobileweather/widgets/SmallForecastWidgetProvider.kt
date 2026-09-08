@@ -100,6 +100,9 @@ open class SmallForecastWidgetProvider : BaseWidgetProvider() {
             val symbol = first.smartSymbol
             val iconRes = context.resources.getIdentifier("s_$symbol", "drawable", context.packageName)
             views.setImageViewResource(R.id.weatherIconImageView, iconRes)
+            val descriptionSymbol = if (symbol > 100) symbol - 100 else symbol
+            val descriptionRes = context.resources.getIdentifier("s_$descriptionSymbol", "string", context.packageName)
+            if (descriptionRes != 0) views.setContentDescription(R.id.weatherIconImageView, context.getString(descriptionRes))
 
             showCrisisViewIfNeeded(context, data.announcements, views)
 
