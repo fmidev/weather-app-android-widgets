@@ -4,6 +4,10 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.RelativeSizeSpan
+import android.text.style.SuperscriptSpan
 import android.util.Log
 import android.view.View.GONE
 import android.view.View.VISIBLE
@@ -77,8 +81,18 @@ open class SmallForecastWidgetProvider : BaseWidgetProvider() {
 
             views.setTextViewText(R.id.locationNameTextView, "${first.name},")
             views.setTextViewText(R.id.locationRegionTextView, first.region)
-            views.setTextViewText(R.id.temperatureTextView, first.temperature.roundToInt().toString())
-            views.setTextViewText(R.id.temperatureUnitTextView, "°")
+            val temperature = first.temperature.roundToInt().toString()
+            if (views.layoutId == R.layout.small_forecast_widget_layout) {
+                // Keep the degree symbol attached to the temperature while the text auto-sizes.
+                val temperatureWithUnit = SpannableString("$temperature°").apply {
+                    setSpan(RelativeSizeSpan(0.5f), temperature.length, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    setSpan(SuperscriptSpan(), temperature.length, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+                views.setTextViewText(R.id.temperatureTextView, temperatureWithUnit)
+            } else {
+                views.setTextViewText(R.id.temperatureTextView, temperature)
+                views.setTextViewText(R.id.temperatureUnitTextView, "°")
+            }
 
             val symbol = first.smartSymbol
             val iconRes = context.resources.getIdentifier("s_$symbol", "drawable", context.packageName)
