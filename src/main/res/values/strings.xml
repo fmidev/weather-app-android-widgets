@@ -67,6 +67,7 @@
     <string name="small_warnings_widget">Warnings compact</string>
     <string name="allow_background_location_service">Please allow the Weather app background location service (Allow all the time) use your current location to show weather near you.</string>
     <string name="warnings">Warnings</string>
+    <string name="warnings_unknown">Unknown warning</string>
     <string name="no_warnings">No warnings</string>
     <string name="warnings_flood">Flood warning</string>
     <string name="warnings_grass_fire_weather">Grass fire warning</string>
@@ -130,6 +131,8 @@
     <string name="s_71">Isolated thundershowers</string>
     <string name="s_74">Scattered thundershowers</string>
     <string name="s_77">Thundershowers</string>
+    <string name="default_background">Default</string>
+    <string name="transparent_background">Transparent background</string>
     <string name="gradient_background">Gradient background</string>
     <string name="gradient_background_limitations">Gradient background requires that dark theme is enabled on system settings.</string>
     <string name="location_services_not_allowed">Location services are not allowed. Please enable them in the settings.</string>

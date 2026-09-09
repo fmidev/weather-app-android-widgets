@@ -41,15 +41,43 @@
                     android:paddingBottom="4dp"
                     android:text="@string/theme" />
 
-                <CheckBox
-                    android:id="@+id/gradientBackgroundCheckbox"
-                    style="@style/configBody"
-                    android:buttonTint="@color/radio_button_selector"
-                    android:layout_width="wrap_content"
+                <RadioGroup
+                    android:id="@+id/themeRadioGroup"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/gradient_background" />
+                    android:checkedButton="@+id/defaultBackgroundRadioButton">
+
+                    <RadioButton
+                        android:id="@+id/defaultBackgroundRadioButton"
+                        style="@style/configBody"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:buttonTint="@color/radio_button_selector"
+                        android:text="@string/default_background" />
+
+                    <RadioButton
+                        android:id="@+id/transparentBackgroundRadioButton"
+                        style="@style/configBody"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:buttonTint="@color/radio_button_selector"
+                        android:text="@string/transparent_background" />
+
+                    <RadioButton
+                        android:id="@+id/gradientBackgroundRadioButton"
+                        style="@style/configBody"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:buttonTint="@color/radio_button_selector"
+                        android:text="@string/gradient_background" />
+
+                </RadioGroup>
 
                 <TextView
+                    android:id="@+id/gradientBackgroundLimitations"
                     style="@style/configBody"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
