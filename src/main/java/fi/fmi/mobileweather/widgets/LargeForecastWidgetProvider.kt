@@ -59,7 +59,10 @@ open class LargeForecastWidgetProvider : BaseWidgetProvider() {
                 }
             }
 
-            if (firstFutureIndex == -1 || forecastItems.size < firstFutureIndex + 1) return
+            if (firstFutureIndex == -1 || forecastItems.size < firstFutureIndex + 1) {
+                showErrorView(context, appWidgetManager, pref, context.getString(R.string.update_failed), "", appWidgetId)
+                return
+            }
 
             views.removeAllViews(R.id.forecastContainer)
 
@@ -74,6 +77,9 @@ open class LargeForecastWidgetProvider : BaseWidgetProvider() {
                     val symbol = forecast.smartSymbol
                     val iconRes = context.resources.getIdentifier("s_$symbol", "drawable", context.packageName)
                     views.setImageViewResource(R.id.weatherIconImageView, iconRes)
+                    val descriptionSymbol = if (symbol > 100) symbol - 100 else symbol
+                    val descriptionRes = context.resources.getIdentifier("s_$descriptionSymbol", "string", context.packageName)
+                    if (descriptionRes != 0) views.setContentDescription(R.id.weatherIconImageView, context.getString(descriptionRes))
                     continue
                 }
 
@@ -83,6 +89,9 @@ open class LargeForecastWidgetProvider : BaseWidgetProvider() {
                 val symbol = forecast.smartSymbol
                 val iconRes = context.resources.getIdentifier("s_$symbol", "drawable", context.packageName)
                 step.setImageViewResource(R.id.weatherIconImageView, iconRes)
+                val descriptionSymbol = if (symbol > 100) symbol - 100 else symbol
+                val descriptionRes = context.resources.getIdentifier("s_$descriptionSymbol", "string", context.packageName)
+                if (descriptionRes != 0) step.setContentDescription(R.id.weatherIconImageView, context.getString(descriptionRes))
                 views.addView(R.id.forecastContainer, step)
             }
 
@@ -90,7 +99,10 @@ open class LargeForecastWidgetProvider : BaseWidgetProvider() {
             val updateStr = "${context.getString(R.string.updated)} <b>$formattedTime</b>"
             views.setTextViewText(R.id.updateTimeTextView, Html.fromHtml(updateStr, Html.FROM_HTML_MODE_LEGACY))
 
+            views.removeAllViews(R.id.crisisViewContainer)
             views.setViewVisibility(R.id.crisisViewContainer, GONE)
+            views.setViewVisibility(R.id.locationNameTextView, VISIBLE)
+            views.setViewVisibility(R.id.locationRegionTextView, VISIBLE)
             val announcements = widgetData.announcements
             if (announcements != null) {
                 for (ann in announcements) {
