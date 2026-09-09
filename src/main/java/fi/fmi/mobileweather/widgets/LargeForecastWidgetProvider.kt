@@ -59,7 +59,10 @@ open class LargeForecastWidgetProvider : BaseWidgetProvider() {
                 }
             }
 
-            if (firstFutureIndex == -1 || forecastItems.size < firstFutureIndex + 1) return
+            if (firstFutureIndex == -1 || forecastItems.size < firstFutureIndex + 1) {
+                showErrorView(context, appWidgetManager, pref, context.getString(R.string.update_failed), "", appWidgetId)
+                return
+            }
 
             views.removeAllViews(R.id.forecastContainer)
 
