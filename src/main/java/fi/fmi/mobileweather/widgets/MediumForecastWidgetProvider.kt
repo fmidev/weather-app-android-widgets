@@ -35,7 +35,7 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
         newOptions: Bundle
     ) {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
-        updateAppWidget(context, appWidgetManager, appWidgetId)
+        resizeForecastWidget(context, appWidgetManager, appWidgetId)
     }
 
     private fun getTimestepCount(widgetWidth: Int): Double {
@@ -143,7 +143,9 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
             }
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
-            pref.saveLong(WIDGET_UI_UPDATED, System.currentTimeMillis())
+            if (!widgetInitResult.preserveUpdateTime) {
+                pref.saveLong(WIDGET_UI_UPDATED, System.currentTimeMillis())
+            }
         } catch (e: Exception) {
             Log.e(TAG, "UI Update failed", e)
         }

@@ -17,6 +17,7 @@ import android.view.View.GONE
 import android.view.View.VISIBLE
 import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
+import androidx.work.ExistingWorkPolicy
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.google.common.util.concurrent.ListenableFuture
@@ -109,6 +110,22 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
     protected open fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
         val operation = WidgetNotification.enqueueWidgetUpdate(context, getWidgetType(), appWidgetId)
         pendingEnqueues?.add(operation.result)
+    }
+
+    protected fun resizeForecastWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
+        val pref = SharedPreferencesHelper.getInstance(context, appWidgetId)
+        val cachedData = getCachedData(pref)
+        val now = System.currentTimeMillis()
+        if (cachedData?.forecast?.any { it.epochtime * 1000 > now } == true) {
+            // Rendering existing data must not renew either the cache or the UI freshness timestamp.
+            val initResult = initWidget(context, null, pref, appWidgetId).copy(preserveUpdateTime = true)
+            setWidgetUi(context, appWidgetManager, cachedData, pref, initResult, appWidgetId)
+        } else {
+            val operation = WidgetNotification.enqueueWidgetUpdate(
+                context, getWidgetType(), appWidgetId, ExistingWorkPolicy.KEEP
+            )
+            pendingEnqueues?.add(operation.result)
+        }
     }
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
@@ -407,7 +424,8 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
 
     data class WidgetInitResult(
         val widgetRemoteViews: RemoteViews,
-        val gradientBackground: Boolean
+        val gradientBackground: Boolean,
+        val preserveUpdateTime: Boolean = false
     )
 
     companion object {

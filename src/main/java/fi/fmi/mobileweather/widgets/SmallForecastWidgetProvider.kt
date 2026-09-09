@@ -46,7 +46,7 @@ open class SmallForecastWidgetProvider : BaseWidgetProvider() {
         val minHeight = newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
         val layoutId = getLayoutResourceIdForResize(minWidth, minHeight)
         SharedPreferencesHelper.getInstance(context, appWidgetId).saveInt(LAYOUT_RES_ID, layoutId)
-        updateAppWidget(context, appWidgetManager, appWidgetId)
+        resizeForecastWidget(context, appWidgetManager, appWidgetId)
     }
 
     private fun getLayoutResourceIdForResize(minWidth: Int, minHeight: Int): Int {
@@ -107,7 +107,9 @@ open class SmallForecastWidgetProvider : BaseWidgetProvider() {
             showCrisisViewIfNeeded(context, data.announcements, views)
 
             manager.updateAppWidget(widgetId, views)
-            pref.saveLong(WIDGET_UI_UPDATED, System.currentTimeMillis())
+            if (!initResult.preserveUpdateTime) {
+                pref.saveLong(WIDGET_UI_UPDATED, System.currentTimeMillis())
+            }
         } catch (e: Exception) {
             Log.e(TAG, "UI Update failed", e)
         }

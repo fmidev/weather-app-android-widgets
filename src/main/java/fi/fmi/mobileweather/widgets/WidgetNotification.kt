@@ -28,7 +28,12 @@ object WidgetNotification {
 
     internal fun immediateWorkName(widgetId: Int) = "WidgetUpdate:$widgetId"
 
-    internal fun enqueueWidgetUpdate(context: Context, widgetType: WidgetType, widgetId: Int): Operation {
+    internal fun enqueueWidgetUpdate(
+        context: Context,
+        widgetType: WidgetType,
+        widgetId: Int,
+        policy: ExistingWorkPolicy = ExistingWorkPolicy.REPLACE
+    ): Operation {
         val worker = when (widgetType) {
             WidgetType.WEATHER_FORECAST -> WeatherWidgetsUpdateWorker::class.java
             WidgetType.WARNINGS -> WarningsWidgetsUpdateWorker::class.java
@@ -37,7 +42,7 @@ object WidgetNotification {
             .setInputData(Data.Builder().putIntArray(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(widgetId)).build())
             .build()
         return WorkManager.getInstance(context).enqueueUniqueWork(
-            immediateWorkName(widgetId), ExistingWorkPolicy.REPLACE, request
+            immediateWorkName(widgetId), policy, request
         )
     }
 
