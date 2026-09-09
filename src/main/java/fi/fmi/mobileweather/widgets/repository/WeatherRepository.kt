@@ -183,6 +183,7 @@ class WeatherRepository {
             val url = URL(src)
             val connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = 10000
+            connection.readTimeout = 10000
             connection.inputStream.use { input ->
                 BufferedReader(InputStreamReader(input, StandardCharsets.UTF_8)).use { reader ->
                     val response = StringBuilder()
