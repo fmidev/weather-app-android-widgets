@@ -99,7 +99,10 @@ open class LargeForecastWidgetProvider : BaseWidgetProvider() {
             val updateStr = "${context.getString(R.string.updated)} <b>$formattedTime</b>"
             views.setTextViewText(R.id.updateTimeTextView, Html.fromHtml(updateStr, Html.FROM_HTML_MODE_LEGACY))
 
+            views.removeAllViews(R.id.crisisViewContainer)
             views.setViewVisibility(R.id.crisisViewContainer, GONE)
+            views.setViewVisibility(R.id.locationNameTextView, VISIBLE)
+            views.setViewVisibility(R.id.locationRegionTextView, VISIBLE)
             val announcements = widgetData.announcements
             if (announcements != null) {
                 for (ann in announcements) {
