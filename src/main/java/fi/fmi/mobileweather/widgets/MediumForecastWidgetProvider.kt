@@ -111,6 +111,9 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
                 val symbol = forecast.smartSymbol
                 val iconRes = context.resources.getIdentifier("s_$symbol", "drawable", context.packageName)
                 step.setImageViewResource(R.id.weatherIconImageView, iconRes)
+                val descriptionSymbol = if (symbol > 100) symbol - 100 else symbol
+                val descriptionRes = context.resources.getIdentifier("s_$descriptionSymbol", "string", context.packageName)
+                if (descriptionRes != 0) step.setContentDescription(R.id.weatherIconImageView, context.getString(descriptionRes))
 
                 if (i == maxIndex - 1) {
                     step.setViewVisibility(R.id.forecastBorder, GONE)
