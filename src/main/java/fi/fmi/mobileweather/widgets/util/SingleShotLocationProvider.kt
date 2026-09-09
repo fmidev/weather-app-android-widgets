@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Handler
+import android.os.CancellationSignal
 import android.os.Looper
 import android.util.Log
 import androidx.core.app.ActivityCompat
@@ -31,8 +32,8 @@ object SingleShotLocationProvider {
     // Both location permissions are checked before the supplied request is invoked.
     @SuppressLint("MissingPermission")
     @JvmStatic
-    fun requestSingleUpdate(context: Context, callback: LocationCallback) {
-        requestSingleUpdate(context, callback) { request, token ->
+    fun requestSingleUpdate(context: Context, callback: LocationCallback): CancellationSignal {
+        return requestSingleUpdate(context, callback) { request, token ->
             LocationServices.getFusedLocationProviderClient(context.applicationContext)
                 .getCurrentLocation(request, token)
         }
@@ -42,12 +43,13 @@ object SingleShotLocationProvider {
         context: Context,
         callback: LocationCallback,
         requestLocation: (CurrentLocationRequest, CancellationToken) -> Task<Location>
-    ) {
+    ): CancellationSignal {
+        val signal = CancellationSignal()
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
             ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             Log.d(TAG, "Permissions missing")
             callback.onLocationFailed()
-            return
+            return signal
         }
 
         val handler = Handler(Looper.getMainLooper())
@@ -70,6 +72,12 @@ object SingleShotLocationProvider {
             Log.d(TAG, "Location request timed out")
             finish(null)
         }
+        signal.setOnCancelListener {
+            if (completed.compareAndSet(false, true)) {
+                handler.removeCallbacks(timeout)
+                cancellation.cancel()
+            }
+        }
         // Also bound the wait when Play services cannot complete the task promptly.
         handler.postDelayed(timeout, TIMEOUT_MS)
 
@@ -87,5 +95,6 @@ object SingleShotLocationProvider {
             Log.e(TAG, "Error requesting location", e)
             finish(null)
         }
+        return signal
     }
 }

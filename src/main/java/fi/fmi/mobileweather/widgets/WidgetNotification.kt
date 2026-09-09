@@ -7,6 +7,10 @@ import android.content.Context
 import android.util.Log
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.Data
+import androidx.work.OneTimeWorkRequest
+import androidx.work.Operation
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
@@ -21,6 +25,25 @@ object WidgetNotification {
     const val WEATHER_WIDGET_UPDATE_WORK = "WeatherWidgetUpdate"
     const val WARNINGS_WIDGET_UPDATE_WORK = "WarningsWidgetUpdate"
     const val DEFAULT_INTERVAL = 15
+
+    internal fun immediateWorkName(widgetId: Int) = "WidgetUpdate:$widgetId"
+
+    internal fun enqueueWidgetUpdate(context: Context, widgetType: WidgetType, widgetId: Int): Operation {
+        val worker = when (widgetType) {
+            WidgetType.WEATHER_FORECAST -> WeatherWidgetsUpdateWorker::class.java
+            WidgetType.WARNINGS -> WarningsWidgetsUpdateWorker::class.java
+        }
+        val request = OneTimeWorkRequest.Builder(worker)
+            .setInputData(Data.Builder().putIntArray(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(widgetId)).build())
+            .build()
+        return WorkManager.getInstance(context).enqueueUniqueWork(
+            immediateWorkName(widgetId), ExistingWorkPolicy.REPLACE, request
+        )
+    }
+
+    internal fun cancelWidgetUpdate(context: Context, widgetId: Int) {
+        WorkManager.getInstance(context).cancelUniqueWork(immediateWorkName(widgetId))
+    }
 
     private fun providersFor(widgetType: WidgetType): List<Class<out AppWidgetProvider>> = when (widgetType) {
         WidgetType.WEATHER_FORECAST -> listOf(

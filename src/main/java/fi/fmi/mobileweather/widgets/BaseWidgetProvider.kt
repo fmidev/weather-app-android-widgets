@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.location.Location
 import android.os.Handler
+import android.os.CancellationSignal
 import android.os.Looper
 import android.view.View.GONE
 import android.view.View.VISIBLE
@@ -18,6 +19,10 @@ import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.MoreExecutors
+import com.google.common.util.concurrent.SettableFuture
 import fi.fmi.mobileweather.widgets.enumeration.WidgetType
 import fi.fmi.mobileweather.widgets.model.Announcement
 import fi.fmi.mobileweather.widgets.model.ForecastItem
@@ -40,25 +45,40 @@ import fi.fmi.mobileweather.widgets.util.SharedPreferencesHelper
 import fi.fmi.mobileweather.widgets.util.SingleShotLocationProvider
 import fi.fmi.mobileweather.widgets.util.WidgetBackground
 import java.util.Locale
+import java.util.concurrent.Future
 
 abstract class BaseWidgetProvider : AppWidgetProvider() {
 
     private val weatherRepository = WeatherRepository()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val gson = Gson()
+    private var pendingEnqueues: MutableList<ListenableFuture<*>>? = null
 
     protected abstract fun getWidgetType(): WidgetType
     protected abstract fun getLayoutResourceId(): Int
 
     override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        val action = intent.action
-        // AppWidgetProvider already handles updates with explicit IDs in super.onReceive.
-        if (WidgetNotification.ACTION_APPWIDGET_AUTO_UPDATE == action ||
-            (AppWidgetManager.ACTION_APPWIDGET_UPDATE == action &&
-                intent.getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS)?.isNotEmpty() != true)
-        ) {
-            triggerUpdate(context)
+        val enqueues = mutableListOf<ListenableFuture<*>>()
+        pendingEnqueues = enqueues
+        try {
+            super.onReceive(context, intent)
+            val action = intent.action
+            // AppWidgetProvider already handles updates with explicit IDs in super.onReceive.
+            if (WidgetNotification.ACTION_APPWIDGET_AUTO_UPDATE == action ||
+                (AppWidgetManager.ACTION_APPWIDGET_UPDATE == action &&
+                    intent.getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS)?.isNotEmpty() != true)
+            ) {
+                triggerUpdate(context)
+            }
+        } finally {
+            pendingEnqueues = null
+            if (enqueues.isNotEmpty()) {
+                // Hold the broadcast only until WorkManager persists the requests, not during I/O.
+                val pending = goAsync()
+                if (pending != null) {
+                    Futures.whenAllComplete(enqueues).run({ pending.finish() }, MoreExecutors.directExecutor())
+                }
+            }
         }
     }
 
@@ -87,59 +107,90 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
     }
 
     protected open fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
-        val pref = SharedPreferencesHelper.getInstance(context, appWidgetId)
-        val selectedLocation = pref.getInt(SELECTED_LOCATION, Int.MAX_VALUE)
+        val operation = WidgetNotification.enqueueWidgetUpdate(context, getWidgetType(), appWidgetId)
+        pendingEnqueues?.add(operation.result)
+    }
 
-        if (selectedLocation == CURRENT_LOCATION) {
-            handleCurrentLocationUpdate(context, appWidgetManager, appWidgetId, pref)
-        } else if (selectedLocation != Int.MAX_VALUE) {
-            val latlon = pref.getString(FAVORITE_LATLON, null)
-            fetchDataAndUpdate(context, appWidgetManager, appWidgetId, latlon)
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        super.onDeleted(context, appWidgetIds)
+        appWidgetIds.forEach { WidgetNotification.cancelWidgetUpdate(context, it) }
+    }
+
+    internal enum class UpdateResult { SUCCESS, RETRY, FAILURE }
+
+    // Called by WorkManager, never by a broadcast receiver's update path.
+    internal open fun refreshWidget(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int
+    ): ListenableFuture<UpdateResult> {
+        val completion = SettableFuture.create<UpdateResult>()
+        runOnMain(completion) {
+            val pref = SharedPreferencesHelper.getInstance(context, appWidgetId)
+            val selectedLocation = pref.getInt(SELECTED_LOCATION, Int.MAX_VALUE)
+            when (selectedLocation) {
+                CURRENT_LOCATION -> handleCurrentLocationUpdate(context, appWidgetManager, appWidgetId, pref, completion)
+                Int.MAX_VALUE -> completion.set(UpdateResult.SUCCESS)
+                else -> fetchDataAndUpdate(context, appWidgetManager, appWidgetId, pref.getString(FAVORITE_LATLON, null), completion)
+            }
         }
+        return completion
     }
 
     private fun handleCurrentLocationUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int,
-        pref: SharedPreferencesHelper
+        pref: SharedPreferencesHelper,
+        completion: SettableFuture<UpdateResult>
     ) {
         if (!checkLocationPermissions(context)) {
             showLocationErrorView(context, appWidgetManager, pref, appWidgetId)
+            completion.set(UpdateResult.FAILURE)
             return
         }
 
-        SingleShotLocationProvider.requestSingleUpdate(context, object : SingleShotLocationProvider.LocationCallback {
+        val signal = requestLocation(context, object : SingleShotLocationProvider.LocationCallback {
             override fun onNewLocationAvailable(location: Location) {
-                val latlon = getLatLonString(location)
-                pref.saveString("latlon", latlon)
-                fetchDataAndUpdate(context, appWidgetManager, appWidgetId, latlon)
+                runOnMain(completion) {
+                    val latlon = getLatLonString(location)
+                    pref.saveString("latlon", latlon)
+                    fetchDataAndUpdate(context, appWidgetManager, appWidgetId, latlon, completion)
+                }
             }
 
             override fun onLocationFailed() {
-                val storedLatLon = pref.getString("latlon", null)
-                if (storedLatLon != null) {
-                    fetchDataAndUpdate(context, appWidgetManager, appWidgetId, storedLatLon)
-                } else {
-                    showLocationErrorView(context, appWidgetManager, pref, appWidgetId)
+                runOnMain(completion) {
+                    val storedLatLon = pref.getString("latlon", null)
+                    if (storedLatLon != null) {
+                        fetchDataAndUpdate(context, appWidgetManager, appWidgetId, storedLatLon, completion)
+                    } else {
+                        showLocationErrorView(context, appWidgetManager, pref, appWidgetId)
+                        completion.set(UpdateResult.RETRY)
+                    }
                 }
             }
         })
+        completion.addListener({ if (completion.isCancelled) signal.cancel() }, MoreExecutors.directExecutor())
     }
 
     private fun fetchDataAndUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int,
-        latlon: String?
+        latlon: String?,
+        completion: SettableFuture<UpdateResult>
     ) {
         val callback = object : WeatherRepository.WeatherCallback {
             override fun onSuccess(data: WidgetData) {
-                mainHandler.post { updateUI(context, appWidgetManager, appWidgetId, data) }
+                runOnMain(completion) {
+                    updateUI(context, appWidgetManager, appWidgetId, data)
+                    completion.set(UpdateResult.SUCCESS)
+                }
             }
 
             override fun onError(e: Exception) {
-                mainHandler.post {
+                runOnMain(completion) {
                     val pref = SharedPreferencesHelper.getInstance(context, appWidgetId)
                     val cachedData = getCachedData(pref)
                     if (cachedData != null) {
@@ -153,6 +204,7 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
                             getConnectionErrorDescription(context), appWidgetId
                         )
                     }
+                    completion.set(UpdateResult.RETRY)
                 }
             }
         }
@@ -162,10 +214,30 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
             return
         }
 
-        if (getWidgetType() == WidgetType.WARNINGS) {
+        val task = fetchData(context, latlon, callback)
+        completion.addListener({ if (completion.isCancelled) task?.cancel(true) }, MoreExecutors.directExecutor())
+    }
+
+    internal open fun requestLocation(context: Context, callback: SingleShotLocationProvider.LocationCallback): CancellationSignal {
+        return SingleShotLocationProvider.requestSingleUpdate(context, callback)
+    }
+
+    internal open fun fetchData(context: Context, latlon: String, callback: WeatherRepository.WeatherCallback): Future<*>? {
+        return if (getWidgetType() == WidgetType.WARNINGS) {
             weatherRepository.fetchWarningsData(context, latlon, callback)
         } else {
             weatherRepository.fetchForecastData(context, latlon, callback)
+        }
+    }
+
+    private fun runOnMain(completion: SettableFuture<UpdateResult>, action: () -> Unit) {
+        mainHandler.post {
+            if (completion.isDone) return@post
+            try {
+                action()
+            } catch (e: Exception) {
+                completion.setException(e)
+            }
         }
     }
 

@@ -20,9 +20,10 @@ import java.nio.charset.StandardCharsets
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 
 class WeatherRepository internal constructor(private val executorService: ExecutorService) {
-    constructor() : this(Executors.newFixedThreadPool(4))
+    constructor() : this(sharedExecutor)
 
     private val gson = Gson()
 
@@ -35,18 +36,18 @@ class WeatherRepository internal constructor(private val executorService: Execut
         context: Context,
         latlon: String,
         callback: WeatherCallback
-    ) {
+    ): Future<*>? {
         val setup = WidgetSetupManager.getWidgetSetup(context)
         if (setup == null) {
             callback.onError(Exception("Widget setup not available"))
-            return
+            return null
         }
 
         val language = getLanguageString()
         val weatherUrl = setup.weather?.apiUrl
         val announcementsUrl = getAnnouncementsUrl(setup, language)
 
-        executorService.submit {
+        return executorService.submit {
             try {
                 // Run requests directly; waiting for nested tasks can exhaust the pool.
                 val forecast = if (weatherUrl != null) fetchForecast(weatherUrl, latlon, language) else null
@@ -66,11 +67,11 @@ class WeatherRepository internal constructor(private val executorService: Execut
         }
     }
 
-    fun fetchWarningsData(context: Context, latlon: String, callback: WeatherCallback) {
+    fun fetchWarningsData(context: Context, latlon: String, callback: WeatherCallback): Future<*>? {
         val setup = WidgetSetupManager.getWidgetSetup(context)
         if (setup == null) {
             callback.onError(Exception("Widget setup not available"))
-            return
+            return null
         }
 
         val language = getLanguageString()
@@ -78,7 +79,7 @@ class WeatherRepository internal constructor(private val executorService: Execut
         val warningsUrl = setup.warnings?.apiUrl
         val announcementsUrl = getAnnouncementsUrl(setup, language)
 
-        executorService.submit {
+        return executorService.submit {
             try {
                 val warnings = if (warningsUrl != null) fetchWarnings(warningsUrl, latlon, language) else null
                 if (warnings == null) throw Exception("Warnings fetch failed")
@@ -189,6 +190,8 @@ class WeatherRepository internal constructor(private val executorService: Execut
     }
 
     companion object {
+        // Workers create short-lived repositories; keep the bounded pool process-wide.
+        private val sharedExecutor = Executors.newFixedThreadPool(4)
         private const val TAG = "WeatherRepository"
     }
 }

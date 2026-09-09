@@ -178,8 +178,21 @@ class SingleShotLocationProviderTest {
         assertTrue(otherToken.isCancellationRequested)
     }
 
-    private fun startRequest() {
-        SingleShotLocationProvider.requestSingleUpdate(context, callback) { locationRequest, cancellationToken ->
+    @Test fun cancellationStopsLocationRequestAndSuppressesLateResultsAndTimeout() {
+        grant(Manifest.permission.ACCESS_COARSE_LOCATION)
+        val signal = startRequest()
+
+        signal.cancel()
+        assertTrue(token.isCancellationRequested)
+        result.setResult(location())
+        mainLooper.idleFor(Duration.ofSeconds(30))
+
+        assertTrue(callback.locations.isEmpty())
+        assertEquals(0, callback.failures)
+    }
+
+    private fun startRequest(): android.os.CancellationSignal {
+        return SingleShotLocationProvider.requestSingleUpdate(context, callback) { locationRequest, cancellationToken ->
             request = locationRequest
             token = cancellationToken
             result.task
