@@ -76,7 +76,10 @@ open class SmallForecastWidgetProvider : BaseWidgetProvider() {
                     break
                 }
             }
-            if (index == -1) index = 0
+            if (index == -1) {
+                showErrorView(context, manager, pref, context.getString(R.string.update_failed), "", widgetId)
+                return
+            }
             val first = forecastItems[index]
 
             views.setTextViewText(R.id.locationNameTextView, "${first.name},")
@@ -97,6 +100,9 @@ open class SmallForecastWidgetProvider : BaseWidgetProvider() {
             val symbol = first.smartSymbol
             val iconRes = context.resources.getIdentifier("s_$symbol", "drawable", context.packageName)
             views.setImageViewResource(R.id.weatherIconImageView, iconRes)
+            val descriptionSymbol = if (symbol > 100) symbol - 100 else symbol
+            val descriptionRes = context.resources.getIdentifier("s_$descriptionSymbol", "string", context.packageName)
+            if (descriptionRes != 0) views.setContentDescription(R.id.weatherIconImageView, context.getString(descriptionRes))
 
             showCrisisViewIfNeeded(context, data.announcements, views)
 
