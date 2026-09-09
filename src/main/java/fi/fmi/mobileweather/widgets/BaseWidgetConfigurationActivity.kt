@@ -119,9 +119,11 @@ abstract class BaseWidgetConfigurationActivity : Activity() {
 
         setLocationFavoritesButtons()
 
-        if (waitingForAppSettings && hasRequiredLocationPermissions()) {
+        if (waitingForAppSettings) {
             waitingForAppSettings = false
-            finalizeWidget(CURRENT_LOCATION, null)
+            if (hasRequiredLocationPermissions()) {
+                finalizeWidget(CURRENT_LOCATION, null)
+            }
         }
     }
 
@@ -213,12 +215,15 @@ abstract class BaseWidgetConfigurationActivity : Activity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 1 || requestCode == 2) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                finalizeWidget(CURRENT_LOCATION, null)
-            } else {
-                Toast.makeText(this, getString(R.string.denied_positioning), Toast.LENGTH_SHORT).show()
-            }
+        val permissionGranted = when (requestCode) {
+            FOREGROUND_LOCATION_REQUEST_CODE -> hasForegroundLocationPermission()
+            BACKGROUND_LOCATION_REQUEST_CODE -> hasRequiredLocationPermissions()
+            else -> return
+        }
+        if (grantResults.isNotEmpty() && permissionGranted) {
+            askLocationPermissionIfNeeded()
+        } else {
+            Toast.makeText(this, getString(R.string.denied_positioning), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -275,11 +280,9 @@ abstract class BaseWidgetConfigurationActivity : Activity() {
     }
 
     fun askLocationPermissionIfNeeded() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (!hasForegroundLocationPermission()) {
             showGenericLocationPermissionDialog()
-        } else if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        } else if (!hasRequiredLocationPermissions()) {
             showBackgroundLocationPermissionDialog()
         } else {
             finalizeWidget(CURRENT_LOCATION, null)
@@ -301,19 +304,21 @@ abstract class BaseWidgetConfigurationActivity : Activity() {
                 Manifest.permission.ACCESS_COARSE_LOCATION,
                 Manifest.permission.ACCESS_FINE_LOCATION
             ),
-            1
+            FOREGROUND_LOCATION_REQUEST_CODE
         )
     }
 
     private fun requestBackgroundLocationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            openAppDetailsSettings()
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
-                2
+                BACKGROUND_LOCATION_REQUEST_CODE
             )
         } else {
-            openAppDetailsSettings()
+            askLocationPermissionIfNeeded()
         }
     }
 
@@ -325,12 +330,13 @@ abstract class BaseWidgetConfigurationActivity : Activity() {
         startActivity(intent)
     }
 
-    private fun hasRequiredLocationPermissions(): Boolean {
-        val hasForegroundLocation =
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-                    ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    private fun hasForegroundLocationPermission(): Boolean {
+        return ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    }
 
-        if (!hasForegroundLocation) {
+    private fun hasRequiredLocationPermissions(): Boolean {
+        if (!hasForegroundLocationPermission()) {
             return false
         }
 
@@ -361,6 +367,8 @@ abstract class BaseWidgetConfigurationActivity : Activity() {
     }
 
     companion object {
+        private const val FOREGROUND_LOCATION_REQUEST_CODE = 1
+        private const val BACKGROUND_LOCATION_REQUEST_CODE = 2
         private const val STATE_WAITING_FOR_APP_SETTINGS = "waiting_for_app_settings"
 
         @Throws(JSONException::class)
