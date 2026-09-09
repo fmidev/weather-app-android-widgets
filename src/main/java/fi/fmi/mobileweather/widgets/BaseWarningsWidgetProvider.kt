@@ -150,8 +150,14 @@ abstract class BaseWarningsWidgetProvider : BaseWidgetProvider() {
         val d1 = inputFormat.parse(start) ?: return ""
         val d2 = inputFormat.parse(end) ?: return ""
 
-        val outputFormat = SimpleDateFormat(if (isToday(d2.time)) "HH:mm" else "dd.MM. HH:mm", Locale.getDefault())
-        outputFormat.timeZone = TimeZone.getTimeZone("Europe/Helsinki")
+        val outputTimeZone = TimeZone.getTimeZone("Europe/Helsinki")
+        val today = Calendar.getInstance(outputTimeZone)
+        val endDay = Calendar.getInstance(outputTimeZone).apply { time = d2 }
+        val endsToday = today.get(Calendar.ERA) == endDay.get(Calendar.ERA) &&
+                today.get(Calendar.YEAR) == endDay.get(Calendar.YEAR) &&
+                today.get(Calendar.DAY_OF_YEAR) == endDay.get(Calendar.DAY_OF_YEAR)
+        val outputFormat = SimpleDateFormat(if (endsToday) "HH:mm" else "dd.MM. HH:mm", Locale.getDefault())
+        outputFormat.timeZone = outputTimeZone
         return "${outputFormat.format(d1)} - ${outputFormat.format(d2)}"
     }
 
