@@ -18,11 +18,12 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.util.Locale
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.Future
 
-class WeatherRepository {
-    private val executorService = Executors.newFixedThreadPool(4)
+class WeatherRepository internal constructor(private val executorService: ExecutorService) {
+    constructor() : this(Executors.newFixedThreadPool(4))
+
     private val gson = Gson()
 
     interface WeatherCallback {
@@ -47,20 +48,15 @@ class WeatherRepository {
 
         executorService.submit {
             try {
-                val forecastFuture: Future<List<ForecastItem>?> = executorService.submit<List<ForecastItem>?> {
-                    if (weatherUrl != null) fetchForecast(weatherUrl, latlon, language) else null
-                }
-                val announcementsFuture: Future<List<Announcement>?> = executorService.submit<List<Announcement>?> {
-                    fetchAnnouncements(announcementsUrl)
-                }
-
-                var announcements: List<Announcement>? = emptyList()
-                try {
-                    announcements = announcementsFuture.get()
-                } catch (_: Exception) {}
-
-                val forecast = forecastFuture.get()
+                // Run requests directly; waiting for nested tasks can exhaust the pool.
+                val forecast = if (weatherUrl != null) fetchForecast(weatherUrl, latlon, language) else null
                 if (forecast.isNullOrEmpty()) throw Exception("Forecast fetch failed")
+
+                val announcements = try {
+                    fetchAnnouncements(announcementsUrl)
+                } catch (_: Exception) {
+                    emptyList()
+                }
 
                 callback.onSuccess(WidgetData(announcements, forecast))
             } catch (e: Exception) {
@@ -84,25 +80,17 @@ class WeatherRepository {
 
         executorService.submit {
             try {
-                val warningsFuture: Future<WarningsRecordRoot?> = executorService.submit<WarningsRecordRoot?> {
-                    if (warningsUrl != null) fetchWarnings(warningsUrl, latlon, language) else null
-                }
-                val announcementsFuture: Future<List<Announcement>?> = executorService.submit<List<Announcement>?> {
-                    fetchAnnouncements(announcementsUrl)
-                }
-                val locationFuture: Future<List<LocationRecord>?> = executorService.submit<List<LocationRecord>?> {
-                    if (weatherUrl != null) fetchLocationInfo(weatherUrl, latlon) else null
-                }
-
-                var announcements: List<Announcement>? = emptyList()
-                try {
-                    announcements = announcementsFuture.get()
-                } catch (_: Exception) {}
-
-                val warnings = warningsFuture.get()
-                val locations = locationFuture.get()
-
+                val warnings = if (warningsUrl != null) fetchWarnings(warningsUrl, latlon, language) else null
                 if (warnings == null) throw Exception("Warnings fetch failed")
+
+                val locations = if (weatherUrl != null) fetchLocationInfo(weatherUrl, latlon) else null
+                if (locations.isNullOrEmpty()) throw Exception("Location fetch failed")
+
+                val announcements = try {
+                    fetchAnnouncements(announcementsUrl)
+                } catch (_: Exception) {
+                    emptyList()
+                }
 
                 callback.onSuccess(WidgetData(announcements, null, warnings, locations))
             } catch (e: Exception) {

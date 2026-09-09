@@ -67,6 +67,7 @@
     <string name="small_warnings_widget">Varningar kompakt</string>
     <string name="allow_background_location_service">Tillåt att Weather-appens bakgrundsplatstjänst (Tillåt alltid) använder din nuvarande plats för att visa väder nära dig.</string>
     <string name="warnings">Varningar</string>
+    <string name="warnings_unknown">Okänd varning</string>
     <string name="no_warnings">Inga varningar</string>
     <string name="warnings_flood">Varning för översvämning</string>
     <string name="warnings_grass_fire_weather">Risk för gräsbrand</string>

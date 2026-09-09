@@ -4,7 +4,6 @@
 # Only run tests locally, not in CI.
 if [ "$GITHUB_ACTIONS" != "true" ]; then
   (cd .. && ./gradlew :widgets:testDebugUnitTest)
-  # Only run lint and tests locally, not in CI
 
   # Checks secret leaks in the commits that are being pushed
   gitleaks detect --log-opts="@{u}..HEAD"

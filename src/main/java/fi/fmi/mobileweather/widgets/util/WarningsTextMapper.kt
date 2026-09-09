@@ -25,7 +25,6 @@ object WarningsTextMapper {
 
     @JvmStatic
     fun getStringResourceId(type: String?): Int {
-        if (type == null) return 0
-        return stringMap[type] ?: 0
+        return stringMap[type] ?: R.string.warnings_unknown
     }
 }

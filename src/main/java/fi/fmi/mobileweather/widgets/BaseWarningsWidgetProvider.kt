@@ -107,20 +107,27 @@ abstract class BaseWarningsWidgetProvider : BaseWidgetProvider() {
         }
     }
 
-    protected open fun isValidDate(w: Warning): Boolean {
+    protected open fun isValidDate(w: Warning): Boolean = isValidDate(w, System.currentTimeMillis())
+
+    internal fun isValidDate(w: Warning, now: Long): Boolean {
         return try {
             val df = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
             df.timeZone = TimeZone.getTimeZone("UTC")
             val startTime = w.duration?.startTime ?: return false
+            val endTime = w.duration?.endTime ?: return false
             val start = df.parse(startTime) ?: return false
+            val end = df.parse(endTime) ?: return false
 
-            val cal = Calendar.getInstance(TimeZone.getTimeZone("Europe/Helsinki"))
-            cal.time = start
-            val year = cal.get(Calendar.YEAR)
-            val day = cal.get(Calendar.DAY_OF_YEAR)
+            val tomorrow = Calendar.getInstance(TimeZone.getTimeZone("Europe/Helsinki")).apply {
+                timeInMillis = now
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                add(Calendar.DAY_OF_YEAR, 1)
+            }
 
-            val now = Calendar.getInstance(TimeZone.getTimeZone("Europe/Helsinki"))
-            year == now.get(Calendar.YEAR) && day == now.get(Calendar.DAY_OF_YEAR)
+            end.time > now && start.time < tomorrow.timeInMillis
         } catch (_: Exception) {
             false
         }

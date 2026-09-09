@@ -67,6 +67,7 @@
     <string name="small_warnings_widget">Warnings compact</string>
     <string name="allow_background_location_service">Please allow the Weather app background location service (Allow all the time) use your current location to show weather near you.</string>
     <string name="warnings">Warnings</string>
+    <string name="warnings_unknown">Unknown warning</string>
     <string name="no_warnings">No warnings</string>
     <string name="warnings_flood">Flood warning</string>
     <string name="warnings_grass_fire_weather">Grass fire warning</string>
