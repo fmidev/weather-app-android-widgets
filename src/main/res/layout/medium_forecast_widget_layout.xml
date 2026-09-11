@@ -55,6 +55,35 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/updateTimeContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <TextView
+                android:id="@+id/updateTimeTextView"
+                style="@style/updateTime"
+                android:textSize="14sp"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                tools:text="Päivitetty 11.9.2026 klo 12:04" />
+
+            <ImageView
+                android:id="@+id/fmiLogoImageView"
+                android:layout_width="50dp"
+                android:layout_height="24dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/fmi_logo" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/crisisViewContainer"
             android:layout_height="wrap_content"
             android:layout_width="match_parent"

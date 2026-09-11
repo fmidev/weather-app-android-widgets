@@ -6,6 +6,7 @@
     android:targetCellHeight="1"
     android:previewImage="@drawable/medium_forecast_review"
     android:minResizeWidth="220dp"
+    android:maxResizeHeight="120dp"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen">

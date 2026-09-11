@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.View
 import android.view.View.GONE
 import android.view.View.VISIBLE
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RemoteViews
 import android.widget.TextView
@@ -32,7 +33,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -128,6 +131,110 @@ class MediumForecastWidgetProviderTest {
         update(null)
 
         assertTrue(pref.getLong(WIDGET_UI_UPDATED, 0) > old)
+    }
+
+    @Test
+    @Config(qualifiers = "fi")
+    fun footerShowsFinnishUpdateDateAndTime() {
+        val view = update(null)
+        val updatedAt = SharedPreferencesHelper.getInstance(context, widgetId).getLong(WIDGET_UI_UPDATED, 0)
+        val date = SimpleDateFormat("d.M.yyyy", Locale.forLanguageTag("fi")).format(Date(updatedAt))
+        val time = SimpleDateFormat("HH:mm", Locale.forLanguageTag("fi")).format(Date(updatedAt))
+
+        assertEquals("Päivitetty $date klo $time", view.findViewById<TextView>(R.id.updateTimeTextView).text.toString())
+        assertTrue(view.findViewById<ImageView>(R.id.fmiLogoImageView).drawable != null)
+        assertFooterVisibility(view, VISIBLE)
+    }
+
+    @Test
+    @Config(qualifiers = "fi")
+    fun resizingPreservesDisplayedUpdateDateAndTime() {
+        val pref = SharedPreferencesHelper.getInstance(context, widgetId)
+        val updatedAt = Calendar.getInstance().apply {
+            clear()
+            set(2026, Calendar.SEPTEMBER, 11, 12, 4)
+        }.timeInMillis
+        pref.saveLong(WIDGET_UI_UPDATED, updatedAt)
+
+        for (height in listOf(90, 120, 180)) {
+            setWidgetSize(height)
+            provider.render(context, manager, forecastData(null), widgetId, preserveUpdateTime = true)
+            val view = shadowOf(manager).getViewFor(widgetId)
+            assertEquals("Päivitetty 11.9.2026 klo 12:04", view.findViewById<TextView>(R.id.updateTimeTextView).text.toString())
+            assertEquals(updatedAt, pref.getLong(WIDGET_UI_UPDATED, 0))
+        }
+    }
+
+    @Test
+    fun resizingShowsFooterOnlyAtTwoRows() {
+        val pref = SharedPreferencesHelper.getInstance(context, widgetId)
+        pref.saveString(LATEST_JSON, Gson().toJson(forecastData(null).forecast))
+        pref.saveLong(LATEST_JSON_UPDATED, System.currentTimeMillis())
+
+        for ((height, visibility) in listOf(90 to GONE, 120 to VISIBLE, 90 to GONE, 120 to VISIBLE)) {
+            resize(height)
+            assertFooterVisibility(shadowOf(manager).getViewFor(widgetId), visibility)
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "port")
+    fun footerUsesMinimumHeightInPortrait() {
+        assertFooterForOrientationSizes()
+    }
+
+    @Test
+    @Config(qualifiers = "land")
+    fun footerUsesMinimumHeightInLandscape() {
+        assertFooterForOrientationSizes()
+    }
+
+    private fun assertFooterForOrientationSizes() {
+        for ((minHeight, visibility) in listOf(90 to GONE, 120 to VISIBLE)) {
+            setWidgetSize(minHeight)
+            manager.updateAppWidgetOptions(widgetId, Bundle().apply {
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 220)
+            })
+            assertFooterVisibility(update(null), visibility)
+        }
+    }
+
+    @Test
+    fun endingCrisisDoesNotShowFooterAtOneRow() {
+        setWidgetSize(90)
+        assertSingleCrisis(update(listOf(Announcement("Crisis", "Test crisis"))), "Test crisis")
+
+        val view = update(null)
+
+        assertEquals(GONE, view.findViewById<View>(R.id.crisisViewContainer).visibility)
+        assertFooterVisibility(view, GONE)
+    }
+
+    @Test
+    @Config(qualifiers = "fi")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun footerFitsBelowForecastWithoutOverlappingLogo() {
+        val density = context.resources.displayMetrics.density
+        for (width in listOf(220, 320)) {
+            setWidgetSize(120, width)
+            val view = update(null)
+            val widthPx = (width * density).toInt()
+            val heightPx = (120 * density).toInt()
+            view.measure(
+                View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
+            )
+            view.layout(0, 0, widthPx, heightPx)
+
+            val footer = view.findViewById<View>(R.id.updateTimeContainer)
+            val text = view.findViewById<TextView>(R.id.updateTimeTextView)
+            val logo = view.findViewById<ImageView>(R.id.fmiLogoImageView)
+            assertTrue(footer.top >= view.findViewById<View>(R.id.hourForecastRowLayout).bottom)
+            assertTrue(footer.bottom <= heightPx)
+            assertTrue(text.right < logo.left)
+            val icon = view.findViewById<ImageView>(R.id.weatherIconImageView)
+            assertTrue("Weather icon must fit at width $width (footer ${footer.height}, icon ${icon.height})", icon.height > 0)
+        }
     }
 
     private fun assertResizeRequestsUpdate(json: String?, updated: Long = System.currentTimeMillis()) {
@@ -285,6 +392,7 @@ class MediumForecastWidgetProviderTest {
     }
 
     private fun assertSingleCrisis(view: View, message: String) {
+        assertFooterVisibility(view, GONE)
         val container = view.findViewById<LinearLayout>(R.id.crisisViewContainer)
         assertEquals(VISIBLE, container.visibility)
         assertEquals(1, container.childCount)
@@ -296,9 +404,20 @@ class MediumForecastWidgetProviderTest {
     }
 
     private fun assertNoCrisis(view: View) {
+        assertFooterVisibility(view, VISIBLE)
         val container = view.findViewById<LinearLayout>(R.id.crisisViewContainer)
         assertEquals(GONE, container.visibility)
         assertEquals(0, container.childCount)
+    }
+
+    private fun assertFooterVisibility(view: View, visibility: Int) {
+        val footer = view.findViewById<View>(R.id.updateTimeContainer)
+        assertEquals(visibility, footer.visibility)
+        for (id in listOf(R.id.updateTimeTextView, R.id.fmiLogoImageView)) {
+            val child = view.findViewById<View>(id)
+            assertSame(footer, child.parent)
+            assertEquals(VISIBLE, child.visibility)
+        }
     }
 
     private fun assertLocation(view: View, visibility: Int) {
@@ -315,14 +434,14 @@ class MediumForecastWidgetProviderTest {
         override fun initWidget(context: Context, views: RemoteViews?, pref: SharedPreferencesHelper, widgetId: Int) =
             WidgetInitResult(views ?: RemoteViews(context.packageName, getLayoutResourceId()), false)
 
-        fun render(context: Context, manager: AppWidgetManager, data: WidgetData, widgetId: Int) {
+        fun render(context: Context, manager: AppWidgetManager, data: WidgetData, widgetId: Int, preserveUpdateTime: Boolean = false) {
             val views = RemoteViews(context.packageName, R.layout.medium_forecast_widget_layout)
             setWidgetUi(
                 context,
                 manager,
                 data,
                 SharedPreferencesHelper.getInstance(context, widgetId),
-                WidgetInitResult(views, false),
+                WidgetInitResult(views, false, preserveUpdateTime),
                 widgetId
             )
         }

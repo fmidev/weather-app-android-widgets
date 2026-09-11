@@ -10,10 +10,12 @@ import android.view.View.GONE
 import android.view.View.VISIBLE
 import android.widget.RemoteViews
 import fi.fmi.mobileweather.widgets.enumeration.WidgetType
+import fi.fmi.mobileweather.widgets.model.PrefKey.LATEST_JSON_UPDATED
 import fi.fmi.mobileweather.widgets.model.PrefKey.WIDGET_UI_UPDATED
 import fi.fmi.mobileweather.widgets.model.WidgetData
 import fi.fmi.mobileweather.widgets.util.SharedPreferencesHelper
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -63,9 +65,13 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
             minHeight
         }
         val timeStepCount = getTimestepCount(width)
+        // The launcher reports dp, not row counts. Use the shorter orientation's
+        // height to estimate two rows consistently in portrait and landscape.
+        val hasTwoRows = minHeight >= TWO_ROW_MIN_HEIGHT_DP
 
-        // Grow text with the available height while leaving room for weather icons.
-        val textScale = ((height - 90) / 60f).coerceIn(0f, 1f)
+        // Leave room for weather icons and the update time/logo footer as text grows.
+        val footerHeight = if (hasTwoRows) 24 else 0
+        val textScale = ((height - 90 - footerHeight) / 60f).coerceIn(0f, 1f)
 
         val locationSp = 13f + 7f * textScale
         val timeSp = 12f + 6f * textScale
@@ -121,6 +127,21 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
                 views.addView(R.id.hourForecastRowLayout, step)
             }
 
+            val updatedAt = if (widgetInitResult.preserveUpdateTime) {
+                pref.getLong(WIDGET_UI_UPDATED, 0).takeIf { it > 0 }
+                    ?: pref.getLong(LATEST_JSON_UPDATED, now)
+            } else {
+                now
+            }
+            val locale = context.resources.configuration.locales[0]
+            val updateDate = Date(updatedAt)
+            views.setTextViewText(R.id.updateTimeTextView, context.getString(
+                R.string.updated_date_time,
+                SimpleDateFormat("d.M.yyyy", locale).format(updateDate),
+                SimpleDateFormat("HH:mm", locale).format(updateDate)
+            ))
+            views.setViewVisibility(R.id.updateTimeContainer, if (hasTwoRows) VISIBLE else GONE)
+
             views.removeAllViews(R.id.crisisViewContainer)
             views.setViewVisibility(R.id.crisisViewContainer, GONE)
             views.setViewVisibility(R.id.locationNameTextView, VISIBLE)
@@ -135,6 +156,7 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
                         crisisView.setTextViewText(R.id.crisisText, ann.content)
                         views.addView(R.id.crisisViewContainer, crisisView)
                         views.setViewVisibility(R.id.crisisViewContainer, VISIBLE)
+                        views.setViewVisibility(R.id.updateTimeContainer, GONE)
                         views.setViewVisibility(R.id.locationNameTextView, GONE)
                         views.setViewVisibility(R.id.locationRegionTextView, GONE)
                         break
@@ -144,7 +166,7 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
             if (!widgetInitResult.preserveUpdateTime) {
-                pref.saveLong(WIDGET_UI_UPDATED, System.currentTimeMillis())
+                pref.saveLong(WIDGET_UI_UPDATED, updatedAt)
             }
         } catch (e: Exception) {
             Log.e(TAG, "UI Update failed", e)
@@ -165,5 +187,6 @@ open class MediumForecastWidgetProvider : BaseWidgetProvider() {
 
     companion object {
         private const val TAG = "MediumWidgetProvider"
+        private const val TWO_ROW_MIN_HEIGHT_DP = 110
     }
 }
