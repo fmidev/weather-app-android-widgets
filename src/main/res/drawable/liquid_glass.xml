@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     
-    <!-- Läpikuultava lasipinta -->
+    <!-- Translucent glass surface -->
     <item>
         <shape android:shape="rectangle">
             <corners android:radius="28dp" />
             
             <gradient
                 android:angle="135"
-                android:startColor="#80FFFFFF"
-                android:centerColor="#48FFFFFF"
-                android:endColor="#24FFFFFF" />
+                android:startColor="#90FFFFFF"
+                android:centerColor="#58FFFFFF"
+                android:endColor="#34FFFFFF" />
             
             <stroke
                 android:width="1dp"
@@ -18,7 +18,7 @@
         </shape>
     </item>
     
-    <!-- Kevyt sisäinen valonheijastus -->
+    <!-- Subtle internal light reflection -->
     <item
         android:left="2dp"
         android:top="2dp"
@@ -29,7 +29,7 @@
             
             <gradient
                 android:angle="270"
-                android:startColor="#36FFFFFF"
+                android:startColor="#40FFFFFF"
                 android:endColor="#00FFFFFF" />
         </shape>
     </item>
