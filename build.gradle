@@ -1,5 +1,6 @@
 plugins {
     id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
 }
 
 android {
@@ -29,6 +30,32 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            testLogging {
+                events 'passed', 'skipped', 'failed'
+                exceptionFormat 'full'
+            }
+            afterSuite { descriptor, result ->
+                if (descriptor.parent == null) {
+                    logger.lifecycle("Tests: ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped, ${result.testCount} total")
+                }
+            }
+            jvmArgs += [
+                '--add-opens=java.base/java.lang=ALL-UNNAMED',
+                '--add-opens=java.base/java.util=ALL-UNNAMED',
+                '--add-opens=java.base/java.io=ALL-UNNAMED',
+                '--add-opens=java.base/java.net=ALL-UNNAMED',
+                '--add-opens=java.base/java.security=ALL-UNNAMED',
+                '--add-opens=java.base/java.text=ALL-UNNAMED',
+                '--add-opens=java.base/jdk.internal.access=ALL-UNNAMED',
+                '--add-opens=java.desktop/java.awt.font=ALL-UNNAMED',
+                '--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED'
+            ]
+        }
+    }
 }
 
 dependencies {
@@ -36,6 +63,15 @@ dependencies {
     implementation 'androidx.core:core:1.16.0'
     implementation 'androidx.work:work-runtime:2.7.1'
     implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'com.google.android.gms:play-services-location:21.3.0'
     implementation 'com.google.guava:guava:31.1-android'
     implementation project(':react-native-async-storage_async-storage')
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.16.1'
+    testImplementation 'androidx.work:work-testing:2.7.1'
+    // Inspect persisted intervals in WorkManager's test database.
+    testImplementation 'androidx.room:room-runtime:2.2.5'
+    // The host app normally supplies these themes; resource tests link them independently.
+    testImplementation 'com.google.android.material:material:1.13.0'
+    testImplementation 'androidx.core:core-splashscreen:1.0.1'
 }
