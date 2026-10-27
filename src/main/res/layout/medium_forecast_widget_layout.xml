@@ -68,7 +68,7 @@
             <TextView
                 android:id="@+id/updateTimeTextView"
                 style="@style/updateTime"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"

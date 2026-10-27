@@ -214,26 +214,54 @@ class MediumForecastWidgetProviderTest {
     @Config(qualifiers = "fi")
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
     fun footerFitsBelowForecastWithoutOverlappingLogo() {
-        val density = context.resources.displayMetrics.density
-        for (width in listOf(220, 320)) {
-            setWidgetSize(120, width)
-            val view = update(null)
-            val widthPx = (width * density).toInt()
-            val heightPx = (120 * density).toInt()
-            view.measure(
-                View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
-            )
-            view.layout(0, 0, widthPx, heightPx)
+        assertFooterFitsBelowForecast()
+    }
 
-            val footer = view.findViewById<View>(R.id.updateTimeContainer)
-            val text = view.findViewById<TextView>(R.id.updateTimeTextView)
-            val logo = view.findViewById<ImageView>(R.id.fmiLogoImageView)
-            assertTrue(footer.top >= view.findViewById<View>(R.id.hourForecastRowLayout).bottom)
-            assertTrue(footer.bottom <= heightPx)
-            assertTrue(text.right < logo.left)
-            val icon = view.findViewById<ImageView>(R.id.weatherIconImageView)
-            assertTrue("Weather icon must fit at width $width (footer ${footer.height}, icon ${icon.height})", icon.height > 0)
+    @Test
+    @Config(qualifiers = "sv")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun swedishFooterFitsBelowForecastWithoutOverlappingLogo() {
+        assertFooterFitsBelowForecast()
+    }
+
+    @Test
+    @Config(qualifiers = "en")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun englishFooterFitsBelowForecastWithoutOverlappingLogo() {
+        assertFooterFitsBelowForecast()
+    }
+
+    private fun assertFooterFitsBelowForecast() {
+        val density = context.resources.displayMetrics.density
+        val pref = SharedPreferencesHelper.getInstance(context, widgetId)
+        // Cover short and long dates without depending on the day the test runs.
+        for (updatedAt in listOf("11.9.2026 12:04", "27.10.2026 23:59", "31.12.2026 23:59")) {
+            val timestamp = SimpleDateFormat("d.M.yyyy HH:mm", Locale.US).parse(updatedAt)!!.time
+            pref.saveLong(WIDGET_UI_UPDATED, timestamp)
+            for (width in listOf(220, 320)) {
+                setWidgetSize(120, width)
+                provider.render(context, manager, forecastData(null), widgetId, preserveUpdateTime = true)
+                val view = shadowOf(manager).getViewFor(widgetId)
+                val widthPx = (width * density).toInt()
+                val heightPx = (120 * density).toInt()
+                view.measure(
+                    View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
+                )
+                view.layout(0, 0, widthPx, heightPx)
+
+                val footer = view.findViewById<View>(R.id.updateTimeContainer)
+                val text = view.findViewById<TextView>(R.id.updateTimeTextView)
+                val logo = view.findViewById<ImageView>(R.id.fmiLogoImageView)
+                assertTrue(footer.top >= view.findViewById<View>(R.id.hourForecastRowLayout).bottom)
+                assertTrue(footer.bottom <= heightPx)
+                assertTrue(text.right < logo.left)
+                val icon = view.findViewById<ImageView>(R.id.weatherIconImageView)
+                assertTrue("Weather icon must fit at width $width with ${text.text} (footer ${footer.height}, icon ${icon.height})", icon.height > 0)
+                assertTrue("Update time must fit in two lines at width $width: ${text.text}", text.lineCount <= 2)
+                assertEquals(0, text.layout.getEllipsisCount(text.lineCount - 1))
+                assertTrue(text.layout.height <= text.height - text.compoundPaddingTop - text.compoundPaddingBottom)
+            }
         }
     }
 
