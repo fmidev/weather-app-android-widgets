@@ -1,3 +1,9 @@
+# Room instantiates generated database implementations through reflection.
+# R8 must retain their no-argument constructors for WorkManager startup.
+-keep class * extends androidx.room.RoomDatabase {
+    public <init>();
+}
+
 # Gson creates these records through reflection. Keep their names and members so
 # release optimization does not break JSON field mapping or record construction.
 -keep class fi.fmi.mobileweather.widgets.WidgetSetup { *; }
